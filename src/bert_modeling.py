@@ -353,7 +353,9 @@ class BertModel(nn.Module):
 
         embedding_output = self.embeddings(input_ids, token_type_ids)
         if input_mapping:
-            embedding_output = input_mapping(embedding_output)
+            #print (embedding_output.device, input_mapping.module.weight.device)
+            embedding_output = input_mapping(embedding_output).cuda()
+            #print ("mapping bert input", embedding_output.device)
         all_encoder_layers = self.encoder(embedding_output, extended_attention_mask)
         sequence_output = all_encoder_layers[-1]
         pooled_output = self.pooler(sequence_output)

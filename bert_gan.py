@@ -120,7 +120,7 @@ def main():
 class Args(object):
 
     def __init__(self, model_path, vocab_file, bert_config_file, init_checkpoint, 
-                output_file, max_seq_length=128, bert_layer=-1, 
+                output_file, max_seq_length=128, bert_layer=-1, map_input=False,
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None):
 
         self.adversarial = False
@@ -130,6 +130,7 @@ class Args(object):
         self.local_rank = -1
         self.batch_size = 32
         self.do_lower_case = True
+        self.map_input = map_input
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file

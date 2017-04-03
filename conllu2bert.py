@@ -7,6 +7,7 @@ import codecs
 import re
 import numpy as np
 import json
+import argparse
 from bert_gan import *
 
 def load_conllu(file):
@@ -36,7 +37,7 @@ def bert(raw_file, bert_file, gpu, layer, model, max_seq='256',batch_size='8'):
   print (cmd)
   os.system(cmd)
 
-def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8):
+def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8, map_input=False):
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
@@ -46,6 +47,7 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   max_seq_length = max_seq
   flags = Args(model_path, vocab_file, bert_config_file, init_checkpoint, output_file, max_seq_length, bert_layer)
   flags.batch_size = batch_size
+  flags.map_input = map_input
 
   adv_bert = AdvBert(flags)
   adv_bert.list2bert(sents)
@@ -110,17 +112,27 @@ if len(sys.argv) < 7:
   print ("usage:%s [map_model] [bert_model] [layer(-1)] [conllu file] [output bert] [merged bert]" % sys.argv[0])
   exit(1)
 
-map_model = sys.argv[1]
-bert_model = sys.argv[2]
-layer = int(sys.argv[3])
-conll_file = sys.argv[4]
-bert_file = sys.argv[5]
-merge_file = sys.argv[6]
+parser = argparse.ArgumentParser(description='CoNLLU to BERT')
+parser.add_argument("bert_model", type=str, default=None, help="bert model")
+parser.add_argument("conll_file", type=str, default=None, help="input conllu file")
+parser.add_argument("bert_file", type=str, default=None, help="orig bert file")
+parser.add_argument("merge_file", type=str, default=None, help="merged bert file")
+parser.add_argument("--mapping", type=str, default=None, help="mapping model")
+parser.add_argument("--layer", type=int, default=-1, help="output bert layer")
+parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
+args = parser.parse_args()
+
+map_model = args.mapping
+bert_model = args.bert_model
+layer = args.layer
+conll_file = args.conll_file
+bert_file = args.bert_file
+merge_file = args.merge_file
 
 n = 0
 sents = []
 for sent in load_conllu(conll_file):
   sents.append(sent)
 print ("Total {} Sentences".format(len(sents)))
-list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512)
+list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input)
 merge(bert_file, merge_file, sents)
