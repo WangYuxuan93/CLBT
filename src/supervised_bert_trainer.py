@@ -96,7 +96,7 @@ class SupervisedBertTrainer(object):
 
         # check NaN
         if (loss != loss).data.any():
-            logger.error("NaN detected (fool discriminator)")
+            logger.error("NaN detected (supervised learning)")
             exit()
 
         # calculating average cosine similarity
@@ -106,8 +106,8 @@ class SupervisedBertTrainer(object):
         # (n)
         avg_cos_sim = (src_emb * tgt_emb).sum(1).mean()
 
-        if self.args.test:
-            return avg_cos_sim, loss
+        #if self.args.test:
+        #    return avg_cos_sim, loss
         # optim
         self.map_optimizer.zero_grad()
         loss.backward()
@@ -139,9 +139,9 @@ class SupervisedBertTrainer(object):
         Outputs:
             masked_layer [unmasked_len, output_dim]
         """
-        batch_size, seq_len, output_dim = list(embed.size())
+        batch_size, seq_len, output_dim = list(layer.size())
         # [batch_size, seq_len, output_dim] => [unmasked_len, output_dim]
-        return embed.masked_select(mask.byte().view(batch_size, seq_len, 1).expand(-1, -1, output_dim)).view(-1,output_dim)
+        return layer.masked_select(mask.byte().view(batch_size, seq_len, 1).expand(-1, -1, output_dim)).view(-1,output_dim)
 
     def rearange(self, layer, index):
         """
@@ -165,9 +165,13 @@ class SupervisedBertTrainer(object):
         Get bert according to index and align_mask
         """
         unmasked_bert = self.get_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
-        mapped_bert = self.mapping(unmasked_bert, input_mask)
+        if self.args.transformer:
+            mapped_bert = self.mapping(unmasked_bert, input_mask)
+        else:
+            mapped_bert = self.mapping(unmasked_bert)
         rearanged_bert = self.rearange(mapped_bert, index)
         indexed_bert = self.select(rearanged_bert, align_mask)
+        #print (unmasked_bert, '\n', mapped_bert, '\n', rearanged_bert, '\n', indexed_bert)
         return indexed_bert
 
     def get_indexed_bert(self, input_ids, input_mask, index, align_mask, bert_layer=-1, model_id=1):

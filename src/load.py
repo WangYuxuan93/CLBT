@@ -74,7 +74,7 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=Non
     """Loads a data file into a list of `InputBatch`s."""
 
     if aligns:
-        lens = [len(a) for a in aligns]
+        lens = [len(a[0]) for a in aligns]
         max_align = max(lens)
         logger.info("aligned word number: %s" % (sum(lens)))
     features = []
@@ -311,8 +311,8 @@ def load_aligns(file):
         while line:
             pairs = [pair.split('-') for pair in line.strip().split()]
             # remove the one-to-many and many-to-one cases
-            left = Counter([pair[0] for pair in pairs])
-            right = Counter([pair[1] for pair in pairs])
+            left = collections.Counter([pair[0] for pair in pairs])
+            right = collections.Counter([pair[1] for pair in pairs])
             rm_left = []
             rm_right = []
             for l in left:

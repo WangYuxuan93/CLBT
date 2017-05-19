@@ -45,9 +45,10 @@ def main():
     parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
     parser.add_argument("--lr_shrink", type=float, default=0.5, help="Shrink the learning rate if the validation metric decreases (1 to disable)")
     parser.add_argument("--decay_step", type=int, default=100, help="Learning rate decay step (SGD only)")
+    parser.add_argument("--save_all", default=False, action='store_true', help="Save every model?")
     parser.add_argument("--quit_after_n_epochs_without_improvement", type=int, default=500, help="Quit after n epochs without improvement")
     parser.add_argument("--normalize_embed", type=bool_flag, default=False, help="Normalize embeddings? (should be false with l2_dist loss)")
-    parser.add_argument("--loss", type=str, default="cos_sim", help="loss type (cos_sim, max_margin_top-k, l2_dist)")
+    parser.add_argument("--loss", type=str, default="l2_dist", help="loss type (cos_sim, max_margin_top-k, l2_dist)")
     # for bert
     parser.add_argument("--input_file", default=None, type=str)
     parser.add_argument("--vocab_file", default=None, type=str, required=True, 
@@ -72,9 +73,6 @@ def main():
     parser.add_argument("--do_lower_case", default=True, action='store_true', 
                         help="Whether to lower case the input text. Should be True for uncased "
                             "models and False for cased models.")
-    parser.add_argument("--dev_sent_num", default=1000, type=int, help="Number of sentence pair for development(sentence similarity).")
-    parser.add_argument("--print_every_dis_steps", default=100, type=int, help="Print every ? self.discriminator steps.")
-    parser.add_argument("--save_every_dis_steps", default=1000, type=int, help="Save every ? self.discriminator steps.")
     parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
     parser.add_argument("--rm_stop_words", default=False, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
@@ -94,6 +92,7 @@ def main():
     parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
     # For supervised learning
+    parser.add_argument("--adversarial", default=False, action='store_true', help="Adversarial training?")
     parser.add_argument("--align_file", default=None, type=str, help="The alignment file of paralleled sentences")
     # For non-linear mapping
     parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
@@ -214,7 +213,7 @@ class SupervisedBert(object):
                 align_ids_a = align_ids_a.to(self.device)
                 align_ids_b = align_ids_b.to(self.device)
                 align_mask = align_mask.to(self.device)
-
+                #print (align_ids_a, align_ids_b, align_mask)
                 src_bert = self.trainer.get_indexed_mapped_bert(
                                 input_ids_a, input_mask_a, align_ids_a, align_mask, 
                                 bert_layer=self.args.bert_layer, model_id=0)
