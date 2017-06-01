@@ -50,6 +50,7 @@ def merge(bert_file, merge_file, sents, merge_type='sum'):
   n_unk = 0
   n_tok = 0
   fo = codecs.open(merge_file, 'w')
+  print ("Merge Type: {}".format(merge_type))
   with codecs.open(bert_file, 'r') as fin:
     line = fin.readline()
     while line:
@@ -81,13 +82,13 @@ def merge(bert_file, merge_file, sents, merge_type='sum'):
           for j, layer in enumerate(merged["features"][-1]["layers"]):
             if merge_type == 'sum':
               merged["features"][-1]["layers"][j]["values"] = list(np.sum(tmp_layers[j], 0))
-            if merge_type == 'avg':
+            elif merge_type == 'avg':
               merged["features"][-1]["layers"][j]["values"] = list(np.mean(tmp_layers[j], 0))
-            if merge_type == 'first':
+            elif merge_type == 'first':
               merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][0])
-            if merge_type == 'last':
+            elif merge_type == 'last':
               merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][-1])
-            if merge_type == 'mid':
+            elif merge_type == 'mid':
               mid = int(len(tmp_layers[j]) / 2)
               merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][mid])
           if len(sents[n]) < len(merged["features"]) - 1:
@@ -163,4 +164,4 @@ print ("Total {} Sentences".format(len(sents)))
 list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input,
             map_type=args.map_type, activation=args.activation, n_layers=args.n_layers,
             hidden_size=args.hidden_size, num_attention_heads=args.head_num)
-merge(bert_file, merge_file, sents)
+merge(bert_file, merge_file, sents, merge_type=args.merge_type)
