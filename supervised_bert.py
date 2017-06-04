@@ -117,14 +117,15 @@ def main():
 
     bert_super = SupervisedBert(args)
 
+    if args.eval:
+        bert_super.eval()
+        return
+
     if not (args.pred or args.map_type=='svd'):
         bert_super.train()
 
     if args.map_type=='svd':
         bert_super.svd()
-
-    if args.eval:
-        bert_super.eval()
 
 class Args(object):
 
@@ -145,7 +146,7 @@ class Args(object):
         self.do_lower_case = True
         self.map_input = map_input
         self.map_type = map_type
-        #self.fine_tune = fine_tune
+        self.eval = False
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file
@@ -181,7 +182,7 @@ class SupervisedBert(object):
             assert self.args.model_path is not None
         self.dataset = None
         # build model / trainer / evaluator
-        if not self.args.pred:
+        if not (self.args.pred or self.args.eval):
             self.logger = initialize_exp(self.args)
 
         self.bert_model, self.mapping, self.discriminator, self.bert_model1 = build_model(self.args, True)
@@ -409,7 +410,7 @@ class SupervisedBert(object):
 
         to_log["avg_cos_sim"] /= n_batch
         to_log["loss"] /= n_batch
-        self.logger.info("avg cos sim:{:.6f}, avg l2 distance:{:.6f}, instances:{}".format(to_log["avg_cos_sim"], to_log["loss"], n_inst))
+        print("avg cos sim:{:.6f}, avg l2 distance:{:.6f}, instances:{}".format(to_log["avg_cos_sim"], to_log["loss"], n_inst))
 
     def list2bert(self, sents):
         """
