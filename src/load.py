@@ -518,8 +518,9 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
                     toks_a = examples[len(aligns)].toks_a
                     toks_b = examples[len(aligns)].toks_b
                     for pair in align:
-                        if (toks_a[int(pair[0])+1] in punc and toks_b[int(pair[1])+1] not in puncs) or (
-                            toks_a[int(pair[0])+1] not in punc and toks_b[int(pair[1])+1] in puncs):
+                        if (toks_a[int(pair[0])+1] in puncs and toks_b[int(pair[1])+1] not in puncs) or (
+                            toks_a[int(pair[0])+1] not in puncs and toks_b[int(pair[1])+1] in puncs):
+                            #print (len(aligns), pair[0], pair[1], toks_a[int(pair[0])+1], toks_b[int(pair[1])+1])
                             continue
                         else:
                             align_.append(pair)

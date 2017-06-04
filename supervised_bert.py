@@ -323,7 +323,8 @@ class SupervisedBert(object):
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
-                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
+                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file,
+                align_punc=self.args.align_punc, policy=self.args.align_policy)
 
         self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
                                     self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
