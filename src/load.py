@@ -31,7 +31,7 @@ from torch.utils.data.dataloader import _DataLoaderIter
 from torch.utils.data.distributed import DistributedSampler
 
 from src import tokenization
-from src.bert_modeling import BertConfig, BertModel
+
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -222,44 +222,6 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
     return dataloader, unique_id_to_feature
-
-def a():
-    
-    eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
-
-    model.eval()
-    with open(args.output_file, "w", encoding='utf-8') as writer:
-        for input_ids, input_mask, example_indices in eval_dataloader:
-            input_ids = input_ids.to(device)
-            input_mask = input_mask.to(device)
-
-            all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
-            all_encoder_layers = all_encoder_layers
-
-            for b, example_index in enumerate(example_indices):
-                feature = features[example_index.item()]
-                unique_id = int(feature.unique_id)
-                # feature = unique_id_to_feature[unique_id]
-                output_json = collections.OrderedDict()
-                output_json["linex_index"] = unique_id
-                all_out_features = []
-                for (i, token) in enumerate(feature.tokens):
-                    all_layers = []
-                    for (j, layer_index) in enumerate(layer_indexes):
-                        layer_output = all_encoder_layers[int(layer_index)].detach().cpu().numpy()
-                        layer_output = layer_output[b]
-                        layers = collections.OrderedDict()
-                        layers["index"] = layer_index
-                        layers["values"] = [
-                            round(x.item(), 6) for x in layer_output[i]
-                        ]
-                        all_layers.append(layers)
-                    out_features = collections.OrderedDict()
-                    out_features["token"] = token
-                    out_features["layers"] = all_layers
-                    all_out_features.append(out_features)
-                output_json["features"] = all_out_features
-                writer.write(json.dumps(output_json) + "\n")
 
 import sys
 if __name__ == "__main__":

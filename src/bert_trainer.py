@@ -13,11 +13,10 @@ import torch
 from torch.autograd import Variable
 from torch.nn import functional as F
 
-from .utils import get_optimizer, load_embeddings, normalize_embeddings, export_embeddings
-from .utils import clip_parameters
-from .dico_builder import build_dictionary
-from .evaluation.word_translation import DIC_EVAL_PATH, load_identical_char_dico, load_dictionary
-
+from src.utils import get_optimizer, load_embeddings, normalize_embeddings, export_embeddings
+from src.utils import clip_parameters
+from src.evaluation.word_translation import DIC_EVAL_PATH, load_identical_char_dico, load_dictionary
+from torch.utils.data.dataloader import _DataLoaderIter
 
 logger = getLogger()
 
@@ -30,6 +29,7 @@ class BertTrainer(object):
         """
         self.bert_model = bert_model
         self.dataloader = dataloader
+        self.iter_loader = _DataLoaderIter(self.dataloader)
         self.mapping = mapping
         self.discriminator = discriminator
         self.params = params
@@ -49,42 +49,63 @@ class BertTrainer(object):
 
         self.decrease_lr = False
 
-    def get_dis_xy(self, volatile):
+    def get_mapping_xy(self):
         """
-        Get discriminator input batch / output target.
+        Get x/y for mapping step
         """
-        # select random word IDs
-        bs = self.params.batch_size
+        items = next(self.iter_loader, None)
+        if items is None:
+            self.iter_loader = _DataLoaderIter(self.dataloader)
+            items = next(self.iter_loader, None)
+        input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices = items
+        src_emb = self.get_bert(input_ids_a, input_mask_a, bert_layer=self.params.bert_layer)
+        tgt_emb = self.get_bert(input_ids_b, input_mask_b, bert_layer=self.params.bert_layer)
+        src_emb = self.mapping(src_emb)
+        src_len = src_emb.size(0)
+        tgt_len = tgt_emb.size(0)
 
-        src_ids = torch.LongTensor(bs).random_(len(self.src_dico) if mf == 0 else mf)
-        tgt_ids = torch.LongTensor(bs).random_(len(self.tgt_dico) if mf == 0 else mf)
-        if self.params.cuda:
-            src_ids = src_ids.cuda()
-            tgt_ids = tgt_ids.cuda()
-
-        # get word embeddings
-        src_emb = self.src_emb(Variable(src_ids, volatile=True))
-        tgt_emb = self.tgt_emb(Variable(tgt_ids, volatile=True))
-        src_emb = self.mapping(Variable(src_emb.data, volatile=volatile))
-        tgt_emb = Variable(tgt_emb.data, volatile=volatile)
-
-        # input / target
         x = torch.cat([src_emb, tgt_emb], 0)
-        y = torch.FloatTensor(2 * bs).zero_()
-        y[:bs] = 1 - self.params.dis_smooth
-        y[bs:] = self.params.dis_smooth
-        y = Variable(y.cuda() if self.params.cuda else y)
+        y = torch.FloatTensor(src_len+tgt_len).zero_()
+        y[:src_len] = 1 - self.params.dis_smooth
+        y[src_len:] = self.params.dis_smooth
 
-        return x, y
+        return x,y
 
-    def dis_step(self, stats):
+    def get_bert(self, input_ids, input_mask, bert_layer=-1):
+        """
+        Get BERT
+        """
+        with torch.no_grad():
+            all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            encoder_layer = all_encoder_layers[bert_layer]
+        
+        # [batch_size, seq_len, output_dim] => [unmasked_len, output_dim]
+        return self.select(encoder_layer, input_mask)
+
+    def select(self, embed, mask):
+        """
+        Select all unmasked embed in this batch 
+        """
+        batch_size, seq_len, emb_dim = list(embed.size())
+        return embed.masked_select(mask.view(batch_size, seq_len, 1).expand(-1, -1, emb_dim)).view(-1,emb_dim)
+
+    def dis_step(self, src_emb, tgt_emb, stats):
         """
         Train the discriminator.
         """
         self.discriminator.train()
+        src_len = src_emb.size(0)
+        tgt_len = tgt_emb.size(0)
+
+        with torch.no_grad():
+            src_emb = self.mapping(src_emb)
+
+        x = torch.cat([src_emb, tgt_emb], 0)
+        y = torch.FloatTensor(src_len+tgt_len).zero_()
+        y[:src_len] = 1 - self.params.dis_smooth
+        y[src_len:] = self.params.dis_smooth
 
         # loss
-        x, y = self.get_dis_xy(volatile=True)
         preds = self.discriminator(Variable(x.data))
         loss = F.binary_cross_entropy(preds, y)
         stats['DIS_COSTS'].append(loss.data[0])
@@ -110,7 +131,7 @@ class BertTrainer(object):
         self.discriminator.eval()
 
         # loss
-        x, y = self.get_dis_xy(volatile=False)
+        x, y = self.get_mapping_xy()
         preds = self.discriminator(x)
         loss = F.binary_cross_entropy(preds, 1 - y)
         loss = self.params.dis_lambda * loss
@@ -126,42 +147,7 @@ class BertTrainer(object):
         self.map_optimizer.step()
         self.orthogonalize()
 
-        return 2 * self.params.batch_size
-
-    def load_training_dico(self, dico_train):
-        """
-        Load training dictionary.
-        """
-        word2id1 = self.src_dico.word2id
-        word2id2 = self.tgt_dico.word2id
-
-        # identical character strings
-        if dico_train == "identical_char":
-            self.dico = load_identical_char_dico(word2id1, word2id2)
-        # use one of the provided dictionary
-        elif dico_train == "default":
-            filename = '%s-%s.0-5000.txt' % (self.params.src_lang, self.params.tgt_lang)
-            self.dico = load_dictionary(
-                os.path.join(DIC_EVAL_PATH, filename),
-                word2id1, word2id2
-            )
-        # dictionary provided by the user
-        else:
-            self.dico = load_dictionary(dico_train, word2id1, word2id2)
-
-        # cuda
-        if self.params.cuda:
-            self.dico = self.dico.cuda()
-
-    def build_dictionary(self):
-        """
-        Build a dictionary from aligned embeddings.
-        """
-        src_emb = self.mapping(self.src_emb.weight).data
-        tgt_emb = self.tgt_emb.weight.data
-        src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
-        tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
-        self.dico = build_dictionary(src_emb, tgt_emb, self.params)
+        return x.size(0).item()
 
     def procrustes(self):
         """

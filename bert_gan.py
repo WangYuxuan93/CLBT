@@ -85,7 +85,7 @@ parser.add_argument("--init_checkpoint", default=None, type=str, required=True,
                         help="Initial checkpoint (usually from a pre-trained BERT model).")
 
 ## Other parameters
-parser.add_argument("--bert_layer", default="-1", type=str)
+parser.add_argument("--bert_layer", default=-1, type=int)
 parser.add_argument("--max_seq_length", default=128, type=int,
                     help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
                         "than this will be truncated, and sequences shorter than this will be padded.")
@@ -93,6 +93,7 @@ parser.add_argument("--do_lower_case", default=True, action='store_true',
                     help="Whether to lower case the input text. Should be True for uncased "
                         "models and False for cased models.")
 parser.add_argument("--batch_size", default=32, type=int, help="Batch size for predictions.")
+parser.add_argument("--print_every_map_steps", default=100, type=int, help="Print every ? mapping steps.")
 parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
 parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
 # parse parameters
@@ -140,6 +141,8 @@ if params.adversarial:
         logger.info('Starting adversarial training epoch %i...' % n_epoch)
         tic = time.time()
         n_words_proc = 0
+        n_dis_step = 0
+        n_map_step = 0
         stats = {'DIS_COSTS': []}
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in dataloader:
             input_ids_a = input_ids_a.to(device)
@@ -147,23 +150,22 @@ if params.adversarial:
             input_ids_b = input_ids_b.to(device)
             input_mask_b = input_mask_b.to(device)
 
+            src_bert = trainer.get_bert(input_ids_a, input_mask_a, bert_layer=params.bert_layer)
+            tgt_bert = trainer.get_bert(input_ids_b, input_mask_b, bert_layer=params.bert_layer)
+            trainer.dis_step(src_bert, tgt_bert, stats)
 
-        for n_iter in range(0, params.epoch_size, params.batch_size):
-
-            # discriminator training
-            for _ in range(params.dis_steps):
-                trainer.dis_step(stats)
-
-            # mapping training (discriminator fooling)
-            n_words_proc += trainer.mapping_step(stats)
+            n_dis_step += 1
+            if n_dis_step % params.dis_steps == 0:
+                n_words_proc += trainer.mapping_step(stats)
+                n_map_step += 1
 
             # log stats
-            if n_iter % 500 == 0:
+            if n_map_step % params.print_every_map_steps == 0:
                 stats_str = [('DIS_COSTS', 'Discriminator loss')]
                 stats_log = ['%s: %.4f' % (v, np.mean(stats[k]))
                              for k, v in stats_str if len(stats[k]) > 0]
                 stats_log.append('%i samples/s' % int(n_words_proc / (time.time() - tic)))
-                logger.info(('%06i - ' % n_iter) + ' - '.join(stats_log))
+                logger.info(('%06i - ' % n_dis_step) + ' - '.join(stats_log))
 
                 # reset
                 tic = time.time()

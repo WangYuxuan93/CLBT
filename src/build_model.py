@@ -9,14 +9,14 @@ import torch
 from torch import nn
 
 from src.utils import load_embeddings, normalize_embeddings
-
+from src.bert_modeling import BertConfig, BertModel
 
 class Discriminator(nn.Module):
 
-    def __init__(self, params):
+    def __init__(self, params, bert_hidden_size):
         super(Discriminator, self).__init__()
 
-        self.emb_dim = params.emb_dim
+        self.emb_dim = bert_hidden_size
         self.dis_layers = params.dis_layers
         self.dis_hid_dim = params.dis_hid_dim
         self.dis_dropout = params.dis_dropout
@@ -60,13 +60,14 @@ def build_model(params, with_dis):
     model.to(device)
 
     # mapping
-    mapping = nn.Linear(params.emb_dim, params.emb_dim, bias=False)
+    #mapping = nn.Linear(params.emb_dim, params.emb_dim, bias=False)
+    mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
     if getattr(params, 'map_id_init', True):
-        mapping.weight.data.copy_(torch.diag(torch.ones(params.emb_dim)))
+        mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     mapping.to(device)
 
     # discriminator
-    discriminator = Discriminator(params) if with_dis else None
+    discriminator = Discriminator(params, bert_config.hidden_size) if with_dis else None
     discriminator.to(device)
 
     if params.local_rank != -1:
