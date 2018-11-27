@@ -27,6 +27,7 @@ import re
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data.dataLoader import _DataLoaderIter
 from torch.utils.data.distributed import DistributedSampler
 
 from src import tokenization
@@ -214,89 +215,16 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     data = TensorDataset(all_input_ids_a, all_input_mask_a, 
                         all_input_ids_b, all_input_mask_b, all_example_index)
     if local_rank == -1:
-        sampler = SequentialSampler(data)
+        #sampler = SequentialSampler(data)
+        sampler = RandomSampler(data)
     else:
         sampler = DistributedSampler(data)
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
-    return dataloader
+    return dataloader, unique_id_to_feature
 
 def a():
-    parser = argparse.ArgumentParser()
-
-    ## Required parameters
-    parser.add_argument("--input_file", default=None, type=str, required=True)
-    parser.add_argument("--vocab_file", default=None, type=str, required=True, 
-                        help="The vocabulary file that the BERT model was trained on.")
-    parser.add_argument("--output_file", default=None, type=str, required=True)
-    parser.add_argument("--bert_config_file", default=None, type=str, required=True,
-                        help="The config json file corresponding to the pre-trained BERT model. "
-                            "This specifies the model architecture.")
-    parser.add_argument("--init_checkpoint", default=None, type=str, required=True, 
-                        help="Initial checkpoint (usually from a pre-trained BERT model).")
-
-    ## Other parameters
-    parser.add_argument("--layers", default="-1,-2,-3,-4", type=str)
-    parser.add_argument("--max_seq_length", default=128, type=int,
-                        help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
-                            "than this will be truncated, and sequences shorter than this will be padded.")
-    parser.add_argument("--do_lower_case", default=True, action='store_true', 
-                        help="Whether to lower case the input text. Should be True for uncased "
-                            "models and False for cased models.")
-    parser.add_argument("--batch_size", default=32, type=int, help="Batch size for predictions.")
-    parser.add_argument("--local_rank",
-                        type=int,
-                        default=-1,
-                        help = "local_rank for distributed training on gpus")
-
-    args = parser.parse_args()
-
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
-    else:
-        device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
-        # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        torch.distributed.init_process_group(backend='nccl')
-    logger.info("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
-
-    layer_indexes = [int(x) for x in args.layers.split(",")]
-
-    bert_config = BertConfig.from_json_file(args.bert_config_file)
-
-    tokenizer = tokenization.FullTokenizer(
-        vocab_file=args.vocab_file, do_lower_case=args.do_lower_case)
-
-    examples = read_examples(args.input_file)
-
-    features = convert_examples_to_features(
-        examples=examples, seq_length=args.max_seq_length, tokenizer=tokenizer)
-
-    unique_id_to_feature = {}
-    for feature in features:
-        unique_id_to_feature[feature.unique_id] = feature
-
-    model = BertModel(bert_config)
-    if args.init_checkpoint is not None:
-        model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
-    model.to(device)
-
-    if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
-                                                          output_device=args.local_rank)
-    elif n_gpu > 1:
-        model = torch.nn.DataParallel(model)
-
-    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
-
-    eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index)
-    if args.local_rank == -1:
-        eval_sampler = SequentialSampler(eval_data)
-    else:
-        eval_sampler = DistributedSampler(eval_data)
+    
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
 
     model.eval()
@@ -334,8 +262,17 @@ def a():
                 writer.write(json.dumps(output_json) + "\n")
 
 
-    #main()
-import sys
-vocab = sys.argv[1]
-input = sys.argv[2]
-load(vocab, input)
+if __name__ == "__main__":
+    import sys
+    vocab = sys.argv[1]
+    input = sys.argv[2]
+    load(vocab, input)
+    loader = load(vocab, input)
+    loader_ = _DataLoaderIter(loader)
+    print ("map:",loader_.next()[-1])
+    n = 0
+    for a,b,c,d,id in loader:
+        n+=1
+        print (id)
+        if n == 2:
+        print ("map:",loader_.next()[-1])

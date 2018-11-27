@@ -14,13 +14,13 @@ import numpy as np
 import torch
 
 from src.utils import bool_flag, initialize_exp
-from src.models import build_model
-from src.trainer import Trainer
+from src.load import load
+from src.build_model import build_model
+from src.bert_trainer import BertTrainer
 from src.evaluation import Evaluator
 
 
 VALIDATION_METRIC = 'mean_cosine-csls_knn_10-S2T-10000'
-
 
 # main
 parser = argparse.ArgumentParser(description='Unsupervised training')
@@ -74,7 +74,27 @@ parser.add_argument("--src_emb", type=str, default="", help="Reload source embed
 parser.add_argument("--tgt_emb", type=str, default="", help="Reload target embeddings")
 parser.add_argument("--normalize_embeddings", type=str, default="", help="Normalize embeddings before training")
 
+# for bert
+parser.add_argument("--input_file", default=None, type=str, required=True)
+parser.add_argument("--vocab_file", default=None, type=str, required=True, 
+                        help="The vocabulary file that the BERT model was trained on.")
+parser.add_argument("--bert_config_file", default=None, type=str, required=True,
+                        help="The config json file corresponding to the pre-trained BERT model. "
+                            "This specifies the model architecture.")
+parser.add_argument("--init_checkpoint", default=None, type=str, required=True, 
+                        help="Initial checkpoint (usually from a pre-trained BERT model).")
 
+## Other parameters
+parser.add_argument("--bert_layer", default="-1", type=str)
+parser.add_argument("--max_seq_length", default=128, type=int,
+                    help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
+                        "than this will be truncated, and sequences shorter than this will be padded.")
+parser.add_argument("--do_lower_case", default=True, action='store_true', 
+                    help="Whether to lower case the input text. Should be True for uncased "
+                        "models and False for cased models.")
+parser.add_argument("--batch_size", default=32, type=int, help="Batch size for predictions.")
+parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
+parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
 # parse parameters
 params = parser.parse_args()
 
@@ -93,12 +113,20 @@ assert params.export in ["", "txt", "pth"]
 # build model / trainer / evaluator
 logger = initialize_exp(params)
 
-
-
-src_emb, tgt_emb, mapping, discriminator = build_model(params, True)
-trainer = Trainer(src_emb, tgt_emb, mapping, discriminator, params)
+dataloader, unique_id_to_feature = load(params.vocab_file, params.input_file, batch_size=params.batch_size, 
+                                do_lower_case=params.do_lower_case, max_seq_length=params.max_seq_length, 
+                                local_rank=params.local_rank)
+bert_model, mapping, discriminator = build_model(params, True)
+trainer = BertTrainer(bert_model, dataloader, mapping, discriminator, params)
 evaluator = Evaluator(trainer)
 
+
+if params.local_rank == -1 or params.no_cuda:
+    device = torch.device("cuda" if torch.cuda.is_available() and not params.no_cuda else "cpu")
+    n_gpu = torch.cuda.device_count()
+else:
+    device = torch.device("cuda", params.local_rank)
+    n_gpu = 1
 
 """
 Learning loop for Adversarial Training
@@ -113,6 +141,12 @@ if params.adversarial:
         tic = time.time()
         n_words_proc = 0
         stats = {'DIS_COSTS': []}
+        for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in dataloader:
+            input_ids_a = input_ids_a.to(device)
+            input_mask_a = input_mask_a.to(device)
+            input_ids_b = input_ids_b.to(device)
+            input_mask_b = input_mask_b.to(device)
+
 
         for n_iter in range(0, params.epoch_size, params.batch_size):
 
