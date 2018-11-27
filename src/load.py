@@ -27,7 +27,7 @@ import re
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from torch.utils.data.dataLoader import _DataLoaderIter
+from torch.utils.data.dataloader import _DataLoaderIter
 from torch.utils.data.distributed import DistributedSampler
 
 from src import tokenization
@@ -215,8 +215,8 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     data = TensorDataset(all_input_ids_a, all_input_mask_a, 
                         all_input_ids_b, all_input_mask_b, all_example_index)
     if local_rank == -1:
-        #sampler = SequentialSampler(data)
-        sampler = RandomSampler(data)
+        sampler = SequentialSampler(data)
+        #sampler = RandomSampler(data)
     else:
         sampler = DistributedSampler(data)
     dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
@@ -261,18 +261,22 @@ def a():
                 output_json["features"] = all_out_features
                 writer.write(json.dumps(output_json) + "\n")
 
-
+import sys
 if __name__ == "__main__":
-    import sys
     vocab = sys.argv[1]
     input = sys.argv[2]
-    load(vocab, input)
-    loader = load(vocab, input)
+    loader, _ = load(vocab, input)
     loader_ = _DataLoaderIter(loader)
-    print ("map:",loader_.next()[-1])
+    a = next(loader_, None)
+    print ("map:",a[-1])
+    a = next(loader_, None)
+    print ("map:",a[-1])
+    loader_ = _DataLoaderIter(loader)
+    a = next(loader_, None)
+    print ("map:",a[-1])
     n = 0
     for a,b,c,d,id in loader:
         n+=1
         print (id)
         if n == 2:
-        print ("map:",loader_.next()[-1])
+            print ("map:",loader_.next()[-1])
