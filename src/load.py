@@ -29,8 +29,8 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-import src.tokenization
-from src.modeling import BertConfig, BertModel
+from src import tokenization
+from src.bert_modeling import BertConfig, BertModel
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -72,6 +72,8 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
 
     features = []
     for (ex_index, example) in enumerate(examples):
+        if ex_index % 1000 == 0:
+            print ("\r%d" % ex_index, end="")
         tokens_a = tokenizer.tokenize(example.text_a)
         tokens_b = tokenizer.tokenize(example.text_b)
 
@@ -124,22 +126,22 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
         assert len(input_lan_ids_a_) == seq_length
         assert len(input_ids_b_) == seq_length
         assert len(input_mask_b_) == seq_length
-        assert len(input_lan_ids_b_) == seq_lengths
+        assert len(input_lan_ids_b_) == seq_length
 
         if ex_index < 2:
             logger.info("*** Example ***")
             logger.info("unique_id: %s" % (example.unique_id))
-            logger.info("lan1 tokens: %s" % " ".join([str(x) for x in tokens_a_]))
-            logger.info("lan1 input_ids: %s" % " ".join([str(x) for x in input_ids_a_]))
-            logger.info("lan1 input_mask: %s" % " ".join([str(x) for x in input_mask_a_]))
-            logger.info("lan1 input_type_ids: %s" % " ".join([str(x) for x in input_lan_ids_a_]))
-            logger.info("lan2 tokens: %s" % " ".join([str(x) for x in tokens_b_]))
-            logger.info("lan2 input_ids: %s" % " ".join([str(x) for x in input_ids_b_]))
-            logger.info("lan2 input_mask: %s" % " ".join([str(x) for x in input_mask_b_]))
-            logger.info("lan2 input_type_ids: %s" % " ".join([str(x) for x in input_lan_ids_b_]))
+            logger.info("lan0 tokens: %s" % " ".join([str(x) for x in tokens_a_]))
+            logger.info("lan0 input_ids: %s" % " ".join([str(x) for x in input_ids_a_]))
+            logger.info("lan0 input_mask: %s" % " ".join([str(x) for x in input_mask_a_]))
+            logger.info("lan0 input_type_ids: %s" % " ".join([str(x) for x in input_lan_ids_a_]))
+            logger.info("lan1 tokens: %s" % " ".join([str(x) for x in tokens_b_]))
+            logger.info("lan1 input_ids: %s" % " ".join([str(x) for x in input_ids_b_]))
+            logger.info("lan1 input_mask: %s" % " ".join([str(x) for x in input_mask_b_]))
+            logger.info("lan1 input_type_ids: %s" % " ".join([str(x) for x in input_lan_ids_b_]))
 
         features.append(
-            InputFeatures(
+            BiInputFeatures(
                 unique_id=example.unique_id,
                 tokens=[tokens_a_, tokens_b_],
                 input_ids=[input_ids_a_, input_ids_b_],
@@ -203,12 +205,6 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     for feature in features:
         unique_id_to_feature[feature.unique_id] = feature
 
-    self.tokens_a, self.tokens_b = tokens
-        self.input_ids_a, self.input_ids_b = input_ids
-        self.input_mask_a, self.input_mask_b = input_mask
-        self.input_lan_ids_a, self.input_lan_ids_b = input_lan_ids
-
-
     all_input_ids_a = torch.tensor([f.input_ids_a for f in features], dtype=torch.long)
     all_input_ids_b = torch.tensor([f.input_ids_b for f in features], dtype=torch.long)
     all_input_mask_a = torch.tensor([f.input_mask_a for f in features], dtype=torch.long)
@@ -225,7 +221,7 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
 
     return dataloader
 
-def main():
+def a():
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -338,8 +334,8 @@ def main():
                 writer.write(json.dumps(output_json) + "\n")
 
 
-if __name__ == "__main__":
     #main()
-    vocab = sys.argv[1]
-    input = sys.argv[2]
-    load(vocab, input)
+import sys
+vocab = sys.argv[1]
+input = sys.argv[2]
+load(vocab, input)
