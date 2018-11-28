@@ -79,6 +79,7 @@ class BertTrainer(object):
         """
         Get BERT
         """
+        self.bert_model.eval()
         with torch.no_grad():
             all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
             encoder_layer = all_encoder_layers[bert_layer]
@@ -122,8 +123,10 @@ class BertTrainer(object):
         # optim
         self.dis_optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm(self.discriminator.parameters(), self.params.dis_clip_weights)
         self.dis_optimizer.step()
-        clip_parameters(self.discriminator, self.params.dis_clip_weights)
+        
+        #clip_parameters(self.discriminator, self.params.dis_clip_weights)
 
     def mapping_step(self, stats):
         """
@@ -148,6 +151,7 @@ class BertTrainer(object):
         # optim
         self.map_optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm(self.mapping.parameters(), self.params.map_clip_weights)
         self.map_optimizer.step()
         self.orthogonalize()
 
@@ -174,7 +178,7 @@ class BertTrainer(object):
             beta = self.params.map_beta
             W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
 
-    def update_lr(self, to_log, metric):
+    def update_lr(self, sent_sim):
         """
         Update learning rate when using SGD.
         """
@@ -183,13 +187,12 @@ class BertTrainer(object):
         old_lr = self.map_optimizer.param_groups[0]['lr']
         new_lr = max(self.params.min_lr, old_lr * self.params.lr_decay)
         if new_lr < old_lr:
-            logger.info("Decreasing learning rate: %.8f -> %.8f" % (old_lr, new_lr))
+            logger.info("### Decreasing learning rate: {:.8f} -> {:.8f} ###".format(old_lr, new_lr))
             self.map_optimizer.param_groups[0]['lr'] = new_lr
 
-        if self.params.lr_shrink < 1 and to_log[metric] >= -1e7:
-            if to_log[metric] < self.best_valid_metric:
-                logger.info("Validation metric is smaller than the best: %.5f vs %.5f"
-                            % (to_log[metric], self.best_valid_metric))
+        if self.params.lr_shrink < 1 and sent_sim >= -1e7:
+            if sent_sim < self.best_valid_metric:
+                logger.info("### Validation metric is smaller than the best: {:.5f} vs {:.5f}".format(sent_sim, self.best_valid_metric))
                 # decrease the learning rate, only if this is the
                 # second time the validation metric decreases
                 if self.decrease_lr:
@@ -199,26 +202,28 @@ class BertTrainer(object):
                                 % (old_lr, self.map_optimizer.param_groups[0]['lr']))
                 self.decrease_lr = True
 
-    def save_best(self, to_log, metric):
+    def save_best(self, sent_sim):
         """
         Save the best model for the given validation metric.
         """
         # best mapping for the given validation criterion
-        if to_log[metric] > self.best_valid_metric:
+        if sent_sim > self.best_valid_metric:
             # new best mapping
-            self.best_valid_metric = to_log[metric]
-            logger.info('* Best value for "%s": %.5f' % (metric, to_log[metric]))
+            self.best_valid_metric = sent_sim
+            logger.info('### New record (sentence similarity): {:.2f}% ###'.format(sent_sim*100))
             # save the mapping
             W = self.mapping.weight.data.cpu().numpy()
-            path = os.path.join(self.params.exp_path, 'best_mapping.pth')
+            path = os.path.join(self.params.model_path, 'best_mapping.pkl')
             logger.info('* Saving the mapping to %s ...' % path)
             torch.save(W, path)
+            if self.params.save_dis:
+                torch.save(self.discriminator.state_dict(), os.path.join(self.params.model_path, 'discriminator.pkl'))
 
     def reload_best(self):
         """
         Reload the best mapping.
         """
-        path = os.path.join(self.params.exp_path, 'best_mapping.pth')
+        path = os.path.join(self.params.model_path, 'best_mapping.pkl')
         logger.info('* Reloading the best model from %s ...' % path)
         # reload the model
         assert os.path.isfile(path)
@@ -226,28 +231,3 @@ class BertTrainer(object):
         W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
-
-    def export(self):
-        """
-        Export embeddings.
-        """
-        params = self.params
-
-        # load all embeddings
-        logger.info("Reloading all embeddings for mapping ...")
-        params.src_dico, src_emb = load_embeddings(params, source=True, full_vocab=True)
-        params.tgt_dico, tgt_emb = load_embeddings(params, source=False, full_vocab=True)
-
-        # apply same normalization as during training
-        normalize_embeddings(src_emb, params.normalize_embeddings, mean=params.src_mean)
-        normalize_embeddings(tgt_emb, params.normalize_embeddings, mean=params.tgt_mean)
-
-        # map source embeddings to the target space
-        bs = 4096
-        logger.info("Map source embeddings to the target space ...")
-        for i, k in enumerate(range(0, len(src_emb), bs)):
-            x = Variable(src_emb[k:k + bs], volatile=True)
-            src_emb[k:k + bs] = self.mapping(x.cuda() if params.cuda else x).data.cpu()
-
-        # write embeddings to the disk
-        export_embeddings(src_emb, tgt_emb, params)

@@ -16,6 +16,8 @@ import argparse
 import subprocess
 import numpy as np
 import torch
+import json
+import codecs
 from torch import optim
 from logging import getLogger
 
@@ -56,15 +58,17 @@ def initialize_exp(params):
             torch.cuda.manual_seed(params.seed)
 
     # dump parameters
-    params.exp_path = get_exp_path(params)
-    with io.open(os.path.join(params.exp_path, 'params.pkl'), 'wb') as f:
-        pickle.dump(params, f)
+    #params.exp_path = get_exp_path(params)
+    #with io.open(os.path.join(params.model_path, 'params.pkl'), 'wb') as f:
+        #pickle.dump(params, f)
+
+    json.dump(vars(params), codecs.open(os.path.join(params.model_path, "params.json"), "w", encoding="utf-8"))
 
     # create logger
-    logger = create_logger(os.path.join(params.exp_path, 'train.log'), vb=params.verbose)
+    logger = create_logger(os.path.join(params.model_path, 'train.log'), vb=params.verbose)
     logger.info('============ Initialized logger ============')
     logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(params)).items())))
-    logger.info('The experiment will be stored in %s' % params.exp_path)
+    logger.info('The experiment will be stored in %s' % params.model_path)
     return logger
 
 

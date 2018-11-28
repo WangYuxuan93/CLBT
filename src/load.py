@@ -221,7 +221,7 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     #    sampler = DistributedSampler(dataset)
     #dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)
 
-    return dataset, unique_id_to_feature
+    return dataset, unique_id_to_feature, features
 
 import sys
 if __name__ == "__main__":
