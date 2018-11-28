@@ -212,22 +212,23 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     all_input_mask_b = torch.tensor([f.input_mask_b for f in features], dtype=torch.long)
     all_example_index = torch.arange(all_input_ids_a.size(0), dtype=torch.long)
 
-    data = TensorDataset(all_input_ids_a, all_input_mask_a, 
+    dataset = TensorDataset(all_input_ids_a, all_input_mask_a, 
                         all_input_ids_b, all_input_mask_b, all_example_index)
-    if local_rank == -1:
-        sampler = SequentialSampler(data)
-        #sampler = RandomSampler(data)
-    else:
-        sampler = DistributedSampler(data)
-    dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
+    #if local_rank == -1:
+    #    sampler = SequentialSampler(dataset)
+        #sampler = RandomSampler(dataset)
+    #else:
+    #    sampler = DistributedSampler(dataset)
+    #dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)
 
-    return dataloader, unique_id_to_feature
+    return dataset, unique_id_to_feature
 
 import sys
 if __name__ == "__main__":
     vocab = sys.argv[1]
     input = sys.argv[2]
-    loader, _ = load(vocab, input)
+    dataset, _ = load(vocab, input)
+    loader = DataLoader(data, batch_size=batch_size)
     loader_ = _DataLoaderIter(loader)
     a = next(loader_, None)
     print ("map:",a[-1])

@@ -16,6 +16,7 @@ from torch.nn import functional as F
 from src.utils import get_optimizer, load_embeddings, normalize_embeddings, export_embeddings
 from src.utils import clip_parameters
 from src.evaluation.word_translation import DIC_EVAL_PATH, load_identical_char_dico, load_dictionary
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.dataloader import _DataLoaderIter
 
 logger = getLogger()
@@ -23,12 +24,15 @@ logger = getLogger()
 
 class BertTrainer(object):
 
-    def __init__(self, bert_model, dataloader, mapping, discriminator, params):
+    def __init__(self, bert_model, dataset, mapping, discriminator, params):
         """
         Initialize trainer script.
         """
         self.bert_model = bert_model
-        self.dataloader = dataloader
+        self.dataset = dataset
+        #sampler = SequentialSampler(dataset)
+        sampler = RandomSampler(dataset)
+        self.dataloader = DataLoader(dataset, sampler=sampler, batch_size=params.batch_size)
         self.iter_loader = _DataLoaderIter(self.dataloader)
         self.mapping = mapping
         self.discriminator = discriminator

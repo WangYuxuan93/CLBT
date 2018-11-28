@@ -17,7 +17,7 @@ from src.utils import bool_flag, initialize_exp
 from src.load import load
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
-from src.evaluation import Evaluator
+from src.evaluation import BertEvaluator
 
 
 VALIDATION_METRIC = 'mean_cosine-csls_knn_10-S2T-10000'
@@ -114,12 +114,12 @@ assert params.export in ["", "txt", "pth"]
 # build model / trainer / evaluator
 logger = initialize_exp(params)
 
-dataloader, unique_id_to_feature = load(params.vocab_file, params.input_file, batch_size=params.batch_size, 
+dataset, unique_id_to_feature = load(params.vocab_file, params.input_file, batch_size=params.batch_size, 
                                 do_lower_case=params.do_lower_case, max_seq_length=params.max_seq_length, 
                                 local_rank=params.local_rank)
 bert_model, mapping, discriminator = build_model(params, True)
-trainer = BertTrainer(bert_model, dataloader, mapping, discriminator, params)
-evaluator = Evaluator(trainer)
+trainer = BertTrainer(bert_model, dataset, mapping, discriminator, params)
+evaluator = BertEvaluator(trainer)
 
 
 if params.local_rank == -1 or params.no_cuda:
