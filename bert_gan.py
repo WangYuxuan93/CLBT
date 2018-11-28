@@ -16,8 +16,8 @@ import torch
 from src.utils import bool_flag, initialize_exp
 from src.load import load
 from src.build_model import build_model
-from src.bert_self.trainer import Bertself.trainer
-from src.evaluation import Bertself.evaluator
+from src.bert_trainer import BertTrainer
+from src.bert_evaluator import BertEvaluator
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 def main():
@@ -109,8 +109,8 @@ class AdvBert(object):
                                         do_lower_case=self.args.do_lower_case, max_seq_length=self.args.max_seq_length, 
                                         local_rank=self.args.local_rank)
         self.bert_model, self.mapping, self.discriminator = build_model(self.args, True)
-        self.trainer = Bertself.trainer(self.bert_model, self.dataset, self.mapping, self.discriminator, self.args)
-        self.evaluator = Bertself.evaluator(self.trainer, self.features)
+        self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, self.args)
+        self.evaluator = BertEvaluator(self.trainer, self.features)
 
     def train_adv(self):
         """
