@@ -46,29 +46,29 @@ except ImportError:
     FAISS_AVAILABLE = False
 
 
-def initialize_exp(params):
+def initialize_exp(args):
     """
     Initialize experiment.
     """
     # initialization
-    if getattr(params, 'seed', -1) >= 0:
-        np.random.seed(params.seed)
-        torch.manual_seed(params.seed)
-        if params.cuda:
-            torch.cuda.manual_seed(params.seed)
+    if getattr(args, 'seed', -1) >= 0:
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if args.cuda:
+            torch.cuda.manual_seed(args.seed)
 
     # dump parameters
-    #params.exp_path = get_exp_path(params)
-    #with io.open(os.path.join(params.model_path, 'params.pkl'), 'wb') as f:
-        #pickle.dump(params, f)
+    #args.exp_path = get_exp_path(args)
+    #with io.open(os.path.join(args.model_path, 'args.pkl'), 'wb') as f:
+        #pickle.dump(args, f)
 
-    json.dump(vars(params), codecs.open(os.path.join(params.model_path, "params.json"), "w", encoding="utf-8"))
+    json.dump(vars(args), codecs.open(os.path.join(args.model_path, "args.json"), "w", encoding="utf-8"))
 
     # create logger
-    logger = create_logger(os.path.join(params.model_path, 'train.log'), vb=params.verbose)
+    logger = create_logger(os.path.join(args.model_path, 'train.log'), vb=args.verbose)
     logger.info('============ Initialized logger ============')
-    logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(params)).items())))
-    logger.info('The experiment will be stored in %s' % params.model_path)
+    logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
+    logger.info('The experiment will be stored in %s' % args.model_path)
     return logger
 
 
@@ -188,15 +188,15 @@ def get_optimizer(s):
     """
     if "," in s:
         method = s[:s.find(',')]
-        optim_params = {}
+        optim_args = {}
         for x in s[s.find(',') + 1:].split(','):
             split = x.split('=')
             assert len(split) == 2
             assert re.match("^[+-]?(\d+(\.\d*)?|\.\d+)$", split[1]) is not None
-            optim_params[split[0]] = float(split[1])
+            optim_args[split[0]] = float(split[1])
     else:
         method = s
-        optim_params = {}
+        optim_args = {}
 
     if method == 'adadelta':
         optim_fn = optim.Adadelta
@@ -214,33 +214,33 @@ def get_optimizer(s):
         optim_fn = optim.Rprop
     elif method == 'sgd':
         optim_fn = optim.SGD
-        assert 'lr' in optim_params
+        assert 'lr' in optim_args
     else:
         raise Exception('Unknown optimization method: "%s"' % method)
 
     # check that we give good parameters to the optimizer
     expected_args = inspect.getargspec(optim_fn.__init__)[0]
-    assert expected_args[:2] == ['self', 'params']
-    if not all(k in expected_args[2:] for k in optim_params.keys()):
+    assert expected_args[:2] == ['self', 'args']
+    if not all(k in expected_args[2:] for k in optim_args.keys()):
         raise Exception('Unexpected parameters: expected "%s", got "%s"' % (
-            str(expected_args[2:]), str(optim_params.keys())))
+            str(expected_args[2:]), str(optim_args.keys())))
 
-    return optim_fn, optim_params
+    return optim_fn, optim_args
 
 
-def get_exp_path(params):
+def get_exp_path(args):
     """
     Create a directory to store the experiment.
     """
     # create the main dump path if it does not exist
-    exp_folder = MAIN_DUMP_PATH if params.exp_path == '' else params.exp_path
+    exp_folder = MAIN_DUMP_PATH if args.exp_path == '' else args.exp_path
     if not os.path.exists(exp_folder):
         subprocess.Popen("mkdir %s" % exp_folder, shell=True).wait()
-    assert params.exp_name != ''
-    exp_folder = os.path.join(exp_folder, params.exp_name)
+    assert args.exp_name != ''
+    exp_folder = os.path.join(exp_folder, args.exp_name)
     if not os.path.exists(exp_folder):
         subprocess.Popen("mkdir %s" % exp_folder, shell=True).wait()
-    if params.exp_id == '':
+    if args.exp_id == '':
         chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
         while True:
             exp_id = ''.join(random.choice(chars) for _ in range(10))
@@ -248,7 +248,7 @@ def get_exp_path(params):
             if not os.path.isdir(exp_path):
                 break
     else:
-        exp_path = os.path.join(exp_folder, params.exp_id)
+        exp_path = os.path.join(exp_folder, args.exp_id)
         assert not os.path.isdir(exp_path), exp_path
     # create the dump folder
     if not os.path.isdir(exp_path):
@@ -265,7 +265,7 @@ def clip_parameters(model, clip):
             x.data.clamp_(-clip, clip)
 
 
-def read_txt_embeddings(params, source, full_vocab):
+def read_txt_embeddings(args, source, full_vocab):
     """
     Reload pretrained embeddings from a text file.
     """
@@ -273,9 +273,9 @@ def read_txt_embeddings(params, source, full_vocab):
     vectors = []
 
     # load pretrained embeddings
-    lang = params.src_lang if source else params.tgt_lang
-    emb_path = params.src_emb if source else params.tgt_emb
-    _emb_dim_file = params.emb_dim
+    lang = args.src_lang if source else args.tgt_lang
+    emb_path = args.src_emb if source else args.tgt_emb
+    _emb_dim_file = args.emb_dim
     with io.open(emb_path, 'r', encoding='utf-8', newline='\n', errors='ignore') as f:
         for i, line in enumerate(f):
             if i == 0:
@@ -301,7 +301,7 @@ def read_txt_embeddings(params, source, full_vocab):
                     assert vect.shape == (_emb_dim_file,), i
                     word2id[word] = len(word2id)
                     vectors.append(vect[None])
-            if params.max_vocab > 0 and len(word2id) >= params.max_vocab and not full_vocab:
+            if args.max_vocab > 0 and len(word2id) >= args.max_vocab and not full_vocab:
                 break
 
     assert len(word2id) == len(vectors)
@@ -312,9 +312,9 @@ def read_txt_embeddings(params, source, full_vocab):
     dico = Dictionary(id2word, word2id, lang)
     embeddings = np.concatenate(vectors, 0)
     embeddings = torch.from_numpy(embeddings).float()
-    embeddings = embeddings.cuda() if (params.cuda and not full_vocab) else embeddings
+    embeddings = embeddings.cuda() if (args.cuda and not full_vocab) else embeddings
 
-    assert embeddings.size() == (len(dico), params.emb_dim)
+    assert embeddings.size() == (len(dico), args.emb_dim)
     return dico, embeddings
 
 
@@ -337,61 +337,61 @@ def select_subset(word_list, max_vocab):
     return word2id, torch.LongTensor(indexes)
 
 
-def load_pth_embeddings(params, source, full_vocab):
+def load_pth_embeddings(args, source, full_vocab):
     """
     Reload pretrained embeddings from a PyTorch binary file.
     """
     # reload PyTorch binary file
-    lang = params.src_lang if source else params.tgt_lang
-    data = torch.load(params.src_emb if source else params.tgt_emb)
+    lang = args.src_lang if source else args.tgt_lang
+    data = torch.load(args.src_emb if source else args.tgt_emb)
     dico = data['dico']
     embeddings = data['vectors']
     assert dico.lang == lang
-    assert embeddings.size() == (len(dico), params.emb_dim)
+    assert embeddings.size() == (len(dico), args.emb_dim)
     logger.info("Loaded %i pre-trained word embeddings." % len(dico))
 
     # select a subset of word embeddings (to deal with casing)
     if not full_vocab:
-        word2id, indexes = select_subset([dico[i] for i in range(len(dico))], params.max_vocab)
+        word2id, indexes = select_subset([dico[i] for i in range(len(dico))], args.max_vocab)
         id2word = {v: k for k, v in word2id.items()}
         dico = Dictionary(id2word, word2id, lang)
         embeddings = embeddings[indexes]
 
-    assert embeddings.size() == (len(dico), params.emb_dim)
+    assert embeddings.size() == (len(dico), args.emb_dim)
     return dico, embeddings
 
 
-def load_bin_embeddings(params, source, full_vocab):
+def load_bin_embeddings(args, source, full_vocab):
     """
     Reload pretrained embeddings from a fastText binary file.
     """
     # reload fastText binary file
-    lang = params.src_lang if source else params.tgt_lang
-    model = load_fasttext_model(params.src_emb if source else params.tgt_emb)
+    lang = args.src_lang if source else args.tgt_lang
+    model = load_fasttext_model(args.src_emb if source else args.tgt_emb)
     words = model.get_labels()
-    assert model.get_dimension() == params.emb_dim
+    assert model.get_dimension() == args.emb_dim
     logger.info("Loaded binary model. Generating embeddings ...")
     embeddings = torch.from_numpy(np.concatenate([model.get_word_vector(w)[None] for w in words], 0))
     logger.info("Generated embeddings for %i words." % len(words))
-    assert embeddings.size() == (len(words), params.emb_dim)
+    assert embeddings.size() == (len(words), args.emb_dim)
 
     # select a subset of word embeddings (to deal with casing)
     if not full_vocab:
-        word2id, indexes = select_subset(words, params.max_vocab)
+        word2id, indexes = select_subset(words, args.max_vocab)
         embeddings = embeddings[indexes]
     else:
         word2id = {w: i for i, w in enumerate(words)}
     id2word = {i: w for w, i in word2id.items()}
     dico = Dictionary(id2word, word2id, lang)
 
-    assert embeddings.size() == (len(dico), params.emb_dim)
+    assert embeddings.size() == (len(dico), args.emb_dim)
     return dico, embeddings
 
 
-def load_embeddings(params, source, full_vocab=False):
+def load_embeddings(args, source, full_vocab=False):
     """
     Reload pretrained embeddings.
-    - `full_vocab == False` means that we load the `params.max_vocab` most frequent words.
+    - `full_vocab == False` means that we load the `args.max_vocab` most frequent words.
       It is used at the beginning of the experiment.
       In that setting, if two words with a different casing occur, we lowercase both, and
       only consider the most frequent one. For instance, if "London" and "london" are in
@@ -401,13 +401,13 @@ def load_embeddings(params, source, full_vocab=False):
       before we export the embeddings at the end of the experiment.
     """
     assert type(source) is bool and type(full_vocab) is bool
-    emb_path = params.src_emb if source else params.tgt_emb
+    emb_path = args.src_emb if source else args.tgt_emb
     if emb_path.endswith('.pth'):
-        return load_pth_embeddings(params, source, full_vocab)
+        return load_pth_embeddings(args, source, full_vocab)
     if emb_path.endswith('.bin'):
-        return load_bin_embeddings(params, source, full_vocab)
+        return load_bin_embeddings(args, source, full_vocab)
     else:
-        return read_txt_embeddings(params, source, full_vocab)
+        return read_txt_embeddings(args, source, full_vocab)
 
 
 def normalize_embeddings(emb, types, mean=None):
@@ -428,34 +428,34 @@ def normalize_embeddings(emb, types, mean=None):
     return mean.cpu() if mean is not None else None
 
 
-def export_embeddings(src_emb, tgt_emb, params):
+def export_embeddings(src_emb, tgt_emb, args):
     """
     Export embeddings to a text or a PyTorch file.
     """
-    assert params.export in ["txt", "pth"]
+    assert args.export in ["txt", "pth"]
 
     # text file
-    if params.export == "txt":
-        src_path = os.path.join(params.exp_path, 'vectors-%s.txt' % params.src_lang)
-        tgt_path = os.path.join(params.exp_path, 'vectors-%s.txt' % params.tgt_lang)
+    if args.export == "txt":
+        src_path = os.path.join(args.exp_path, 'vectors-%s.txt' % args.src_lang)
+        tgt_path = os.path.join(args.exp_path, 'vectors-%s.txt' % args.tgt_lang)
         # source embeddings
         logger.info('Writing source embeddings to %s ...' % src_path)
         with io.open(src_path, 'w', encoding='utf-8') as f:
             f.write(u"%i %i\n" % src_emb.size())
-            for i in range(len(params.src_dico)):
-                f.write(u"%s %s\n" % (params.src_dico[i], " ".join('%.5f' % x for x in src_emb[i])))
+            for i in range(len(args.src_dico)):
+                f.write(u"%s %s\n" % (args.src_dico[i], " ".join('%.5f' % x for x in src_emb[i])))
         # target embeddings
         logger.info('Writing target embeddings to %s ...' % tgt_path)
         with io.open(tgt_path, 'w', encoding='utf-8') as f:
             f.write(u"%i %i\n" % tgt_emb.size())
-            for i in range(len(params.tgt_dico)):
-                f.write(u"%s %s\n" % (params.tgt_dico[i], " ".join('%.5f' % x for x in tgt_emb[i])))
+            for i in range(len(args.tgt_dico)):
+                f.write(u"%s %s\n" % (args.tgt_dico[i], " ".join('%.5f' % x for x in tgt_emb[i])))
 
     # PyTorch file
-    if params.export == "pth":
-        src_path = os.path.join(params.exp_path, 'vectors-%s.pth' % params.src_lang)
-        tgt_path = os.path.join(params.exp_path, 'vectors-%s.pth' % params.tgt_lang)
+    if args.export == "pth":
+        src_path = os.path.join(args.exp_path, 'vectors-%s.pth' % args.src_lang)
+        tgt_path = os.path.join(args.exp_path, 'vectors-%s.pth' % args.tgt_lang)
         logger.info('Writing source embeddings to %s ...' % src_path)
-        torch.save({'dico': params.src_dico, 'vectors': src_emb}, src_path)
+        torch.save({'dico': args.src_dico, 'vectors': src_emb}, src_path)
         logger.info('Writing target embeddings to %s ...' % tgt_path)
-        torch.save({'dico': params.tgt_dico, 'vectors': tgt_emb}, tgt_path)
+        torch.save({'dico': args.tgt_dico, 'vectors': tgt_emb}, tgt_path)

@@ -57,7 +57,7 @@ def main():
     # training refinement
     parser.add_argument("--n_refinement", type=int, default=0, help="Number of refinement iterations (0 to disable the refinement procedure)")
     # for bert
-    parser.add_argument("--input_file", default=None, type=str, required=True)
+    parser.add_argument("--input_file", default=None, type=str)
     parser.add_argument("--vocab_file", default=None, type=str, required=True, 
                             help="The vocabulary file that the BERT model was trained on.")
     parser.add_argument("--bert_config_file", default=None, type=str, required=True,
@@ -65,7 +65,7 @@ def main():
                                 "This specifies the model architecture.")
     parser.add_argument("--init_checkpoint", default=None, type=str, required=True, 
                             help="Initial checkpoint (usually from a pre-trained BERT model).")
-    ## Other parameters
+    # Other parameters
     parser.add_argument("--bert_layer", default=-1, type=int)
     parser.add_argument("--max_seq_length", default=128, type=int,
                         help="The maximum total input sequence length after WordPiece tokenization. Sequences longer "
@@ -82,14 +82,23 @@ def main():
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
     parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
+    # For predict
+    parser.add_argument("--pred", type=bool_flag, default=False, help="Map source bert to target space")
+    parser.add_argument("--src_file", default=None, type=str, help="The source input file")
+    parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     # parse parameters
     args = parser.parse_args()
 
+    advbert = AdvBert(args)
+
     if args.adversarial:
-        train_adv()
+        advbert.train_adv()
 
     if args.n_refinement > 0:
-        refine()
+        advbert.refine()
+
+    if args.pred:
+        advbert.pred()
 
 class AdvBert(object):
 
@@ -104,23 +113,25 @@ class AdvBert(object):
         assert 0 < self.args.lr_shrink <= 1
         # build model / trainer / evaluator
         self.logger = initialize_exp(self.args)
-
-        self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file, batch_size=self.args.batch_size, 
-                                        do_lower_case=self.args.do_lower_case, max_seq_length=self.args.max_seq_length, 
-                                        local_rank=self.args.local_rank)
+        if self.args.adversarial:
+            assert os.path.isfile(self.args.input_file)
+            self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, 
+                    self.args.input_file, batch_size=self.args.batch_size, 
+                    do_lower_case=self.args.do_lower_case, max_seq_length=self.args.max_seq_length, 
+                    local_rank=self.args.local_rank)
         self.bert_model, self.mapping, self.discriminator = build_model(self.args, True)
         self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, self.args)
         self.evaluator = BertEvaluator(self.trainer, self.features)
+
+        if self.args.local_rank == -1 or self.args.no_cuda:
+            self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
+        else:
+            self.device = torch.device("cuda", self.args.local_rank)
 
     def train_adv(self):
         """
         Learning loop for Adversarial Training
         """
-
-        if self.args.local_rank == -1 or self.args.no_cuda:
-            device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
-        else:
-            device = torch.device("cuda", self.args.local_rank)
 
         self.logger.info('----> ADVERSARIAL TRAINING <----\n\n')
 
@@ -136,10 +147,10 @@ class AdvBert(object):
             n_map_step = 0
             stats = {'DIS_COSTS': []}
             for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
-                input_ids_a = input_ids_a.to(device)
-                input_mask_a = input_mask_a.to(device)
-                input_ids_b = input_ids_b.to(device)
-                input_mask_b = input_mask_b.to(device)
+                input_ids_a = input_ids_a.to(self.device)
+                input_mask_a = input_mask_a.to(self.device)
+                input_ids_b = input_ids_b.to(self.device)
+                input_mask_b = input_mask_b.to(self.device)
 
                 src_bert = self.trainer.get_bert(input_ids_a, input_mask_a, bert_layer=self.args.bert_layer)
                 tgt_bert = self.trainer.get_bert(input_ids_b, input_mask_b, bert_layer=self.args.bert_layer)
@@ -206,8 +217,49 @@ class AdvBert(object):
 
     def pred(self):
         """
+        Map bert of source language to target space
         """
+        assert self.args.src_file is not None
+        assert self.args.output_file is not None
 
         self.trainer.reload_best()
+        self.pred_dataset, unique_id_to_feature, self.test_features = load_single(self.args.vocab_file, 
+                        self.args.src_file, batch_size=self.args.batch_size, 
+                        do_lower_case=self.args.do_lower_case, 
+                        max_seq_length=self.args.max_seq_length, 
+                        local_rank=self.args.local_rank)
+        pred_sampler = SequentialSampler(pred_dataset)
+        pred_dataloader = DataLoader(pred_dataset, sampler=pred_sampler, batch_size=self.args.batch_size)
+        self.bert_model.eval()
+        with open(self.args.output_file, "w", encoding='utf-8') as writer:
+            for input_ids, input_mask, example_indices in pred_dataloader:
+                input_ids = input_ids.to(self.device)
+                input_mask = input_mask.to(self.device)
 
+                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+                src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                mapped_encoder_layer = self.trainer.mapping(src_encoder_layer)
 
+                for b, example_index in enumerate(example_indices):
+                    feature = features[example_index.item()]
+                    unique_id = int(feature.unique_id)
+                    # feature = unique_id_to_feature[unique_id]
+                    output_json = collections.OrderedDict()
+                    output_json["linex_index"] = unique_id
+                    all_out_features = []
+                    for (i, token) in enumerate(feature.tokens):
+                        all_layers = []
+                        layer_output = mapped_encoder_layer.detach().cpu().numpy()
+                        layer_output = layer_output[b]
+                        layers = collections.OrderedDict()
+                        layers["index"] = layer_index
+                        layers["values"] = [
+                            round(x.item(), 6) for x in layer_output[i]
+                        ]
+                        all_layers.append(layers)
+                        out_features = collections.OrderedDict()
+                        out_features["token"] = token
+                        out_features["layers"] = all_layers
+                        all_out_features.append(out_features)
+                    output_json["features"] = all_out_features
+                    writer.write(json.dumps(output_json) + "\n")

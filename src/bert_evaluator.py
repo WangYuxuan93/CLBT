@@ -37,24 +37,24 @@ class BertEvaluator(object):
         self.bert_model = trainer.bert_model
         self.mapping = trainer.mapping
         self.discriminator = trainer.discriminator
-        self.params = trainer.params
+        self.args = trainer.args
         self.dataset = trainer.dataset
         self.features = features
-        self.dev_sent_num = self.params.dev_sent_num
+        self.dev_sent_num = self.args.dev_sent_num
         assert self.dev_sent_num <= len(self.dataset)
         dev_sampler = SubsetSampler(range(self.dev_sent_num))
-        self.dev_loader = DataLoader(self.dataset, sampler=dev_sampler, batch_size=self.params.batch_size)
+        self.dev_loader = DataLoader(self.dataset, sampler=dev_sampler, batch_size=self.args.batch_size)
         logger.info("### Development sentence number: {} ###".format(len(self.dev_sampler)))
         dis_sampler = SequentialSampler(self.dataset)
-        self.dis_loader = DataLoader(self.dataset, sampler=dis_sampler, batch_size=self.params.batch_size)
+        self.dis_loader = DataLoader(self.dataset, sampler=dis_sampler, batch_size=self.args.batch_size)
 
-        if self.params.local_rank == -1 or self.params.no_cuda:
-            self.device = torch.device("cuda" if torch.cuda.is_available() and not self.params.no_cuda else "cpu")
+        if self.args.local_rank == -1 or self.args.no_cuda:
+            self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
         else:
-            self.device = torch.device("cuda", self.params.local_rank)
+            self.device = torch.device("cuda", self.args.local_rank)
 
-        self.stop_words_a = self.load_stop_words(self.params.stop_words_src)
-        self.stop_words_b = self.load_stop_words(self.params.stop_words_tgt)
+        self.stop_words_a = self.load_stop_words(self.args.stop_words_src)
+        self.stop_words_b = self.load_stop_words(self.args.stop_words_tgt)
 
     def get_bert(self, input_ids, input_mask, bert_layer=-1):
         """
@@ -83,6 +83,7 @@ class BertEvaluator(object):
             with open(file, 'r') as fi:
                 return fi.read().strip().split('\n')
         else:
+            logger.info("### Stop word file {} does not exist! ###".format(file))
             return None
 
     def rm_stop_words(self, tokens, embs, stop_words):
@@ -111,9 +112,9 @@ class BertEvaluator(object):
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
-                                    bert_layer=self.params.bert_layer).data.cpu().numpy()
+                                    bert_layer=self.args.bert_layer).data.cpu().numpy()
             tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
-                                    bert_layer=self.params.bert_layer).data.cpu().numpy()
+                                    bert_layer=self.args.bert_layer).data.cpu().numpy()
             
             for i, example_index in enumerate(example_indices):
                 feature = self.features[example_index.item()]
@@ -143,9 +144,9 @@ class BertEvaluator(object):
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dis_loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
-                                    bert_layer=self.params.bert_layer)
+                                    bert_layer=self.args.bert_layer)
             tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
-                                    bert_layer=self.params.bert_layer)
+                                    bert_layer=self.args.bert_layer)
             src_preds.extend(self.discriminator(self.mapping(self.select(src_bert, input_mask_a))).data.cpu().tolist())
             tgt_preds.extend(self.discriminator(self.select(tgt_bert, input_mask_b)).data.cpu().tolist())
 
