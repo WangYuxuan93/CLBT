@@ -61,7 +61,11 @@ def initialize_exp(args):
     #args.exp_path = get_exp_path(args)
     #with io.open(os.path.join(args.model_path, 'args.pkl'), 'wb') as f:
         #pickle.dump(args, f)
-
+    if not os.path.exists(args.model_path):
+        os.makedirs(args.model_path)
+    else:
+        print ("### Model path already exists! ###")
+        exit(1)
     json.dump(vars(args), codecs.open(os.path.join(args.model_path, "args.json"), "w", encoding="utf-8"))
 
     # create logger
@@ -197,7 +201,6 @@ def get_optimizer(s):
     else:
         method = s
         optim_args = {}
-
     if method == 'adadelta':
         optim_fn = optim.Adadelta
     elif method == 'adagrad':
@@ -220,7 +223,7 @@ def get_optimizer(s):
 
     # check that we give good parameters to the optimizer
     expected_args = inspect.getargspec(optim_fn.__init__)[0]
-    assert expected_args[:2] == ['self', 'args']
+    assert expected_args[:2] == ['self', 'params']
     if not all(k in expected_args[2:] for k in optim_args.keys()):
         raise Exception('Unexpected parameters: expected "%s", got "%s"' % (
             str(expected_args[2:]), str(optim_args.keys())))

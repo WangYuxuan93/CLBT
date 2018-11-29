@@ -25,7 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description='Unsupervised training')
     parser.add_argument("--seed", type=int, default=-1, help="Initialization seed")
     parser.add_argument("--verbose", type=int, default=2, help="Verbose level (2:debug, 1:info, 0:warning)")
-    parser.add_argument("--model_path", type=str, default="", help="Where to store experiment logs and models")
+    parser.add_argument("--model_path", type=str, default=None, help="Where to store experiment logs and models")
     # data
     parser.add_argument("--src_lang", type=str, default='en', help="Source language")
     parser.add_argument("--tgt_lang", type=str, default='de', help="Target language")
@@ -73,12 +73,12 @@ def main():
     parser.add_argument("--do_lower_case", default=True, action='store_true', 
                         help="Whether to lower case the input text. Should be True for uncased "
                             "models and False for cased models.")
-    parser.add_argument("--batch_size", default=32, type=int, help="Batch size for predictions.")
-    parser.add_argument("--dev_sent_num", default=10000, type=int, help="Number of sentence pair for development(sentence similarity).")
-    parser.add_argument("--print_every_map_steps", default=100, type=int, help="Print every ? self.mapping steps.")
+    parser.add_argument("--dev_sent_num", default=1000, type=int, help="Number of sentence pair for development(sentence similarity).")
+    parser.add_argument("--print_every_dis_steps", default=100, type=int, help="Print every ? self.mapping steps.")
     parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
-    parser.add_argument("--rm_stop_words", default=True, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
+    parser.add_argument("--rm_stop_words", default=False, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
+    parser.add_argument("--rm_punc", default=True, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
     parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
@@ -111,6 +111,8 @@ class AdvBert(object):
         assert 0 <= self.args.dis_smooth < 0.5
         assert self.args.dis_lambda > 0 and self.args.dis_steps > 0
         assert 0 < self.args.lr_shrink <= 1
+        if self.args.adversarial:
+            assert self.args.model_path is not None
         # build model / trainer / evaluator
         self.logger = initialize_exp(self.args)
         if self.args.adversarial:
@@ -158,11 +160,11 @@ class AdvBert(object):
 
                 n_dis_step += 1
                 if n_dis_step % self.args.dis_steps == 0:
-                    n_words_proc += self.trainer.self.mapping_step(stats)
+                    n_words_proc += self.trainer.mapping_step(stats)
                     n_map_step += 1
 
                 # log stats
-                if n_map_step % self.args.print_every_map_steps == 0:
+                if n_dis_step % self.args.print_every_dis_steps == 0:
                     stats_str = [('DIS_COSTS', 'self.discriminator loss')]
                     stats_log = ['%s: %.4f' % (v, np.mean(stats[k]))
                                  for k, v in stats_str if len(stats[k]) > 0]
@@ -263,3 +265,6 @@ class AdvBert(object):
                         all_out_features.append(out_features)
                     output_json["features"] = all_out_features
                     writer.write(json.dumps(output_json) + "\n")
+
+if __name__ == "__main__":
+  main()

@@ -38,6 +38,11 @@ class BertTrainer(object):
         self.discriminator = discriminator
         self.args = args
 
+        if self.args.local_rank == -1 or self.args.no_cuda:
+            self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
+        else:
+            self.device = torch.device("cuda", self.args.local_rank)
+
         # optimizers
         if hasattr(args, 'map_optimizer'):
             optim_fn, optim_args = get_optimizer(args.map_optimizer)
@@ -62,8 +67,8 @@ class BertTrainer(object):
             self.iter_loader = _DataLoaderIter(self.dataloader)
             items = next(self.iter_loader, None)
         input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices = items
-        src_emb = self.get_bert(input_ids_a, input_mask_a, bert_layer=self.args.bert_layer)
-        tgt_emb = self.get_bert(input_ids_b, input_mask_b, bert_layer=self.args.bert_layer)
+        src_emb = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), bert_layer=self.args.bert_layer)
+        tgt_emb = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), bert_layer=self.args.bert_layer)
         src_emb = self.mapping(src_emb)
         src_len = src_emb.size(0)
         tgt_len = tgt_emb.size(0)
@@ -92,7 +97,7 @@ class BertTrainer(object):
         Select all unmasked embed in this batch 
         """
         batch_size, seq_len, emb_dim = list(embed.size())
-        return embed.masked_select(mask.view(batch_size, seq_len, 1).expand(-1, -1, emb_dim)).view(-1,emb_dim)
+        return embed.masked_select(mask.byte().view(batch_size, seq_len, 1).expand(-1, -1, emb_dim)).view(-1,emb_dim)
 
     def dis_step(self, src_emb, tgt_emb, stats):
         """
@@ -112,8 +117,8 @@ class BertTrainer(object):
 
         # loss
         preds = self.discriminator(Variable(x.data))
-        loss = F.binary_cross_entropy(preds, y)
-        stats['DIS_COSTS'].append(loss.data[0])
+        loss = F.binary_cross_entropy(preds, y.to(self.device))
+        stats['DIS_COSTS'].append(loss.item())
 
         # check NaN
         if (loss != loss).data.any():
@@ -123,7 +128,7 @@ class BertTrainer(object):
         # optim
         self.dis_optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm(self.discriminator.parameters(), self.args.dis_clip_weights)
+        torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), self.args.dis_clip_weights)
         self.dis_optimizer.step()
         
         #clip_parameters(self.discriminator, self.args.dis_clip_weights)
@@ -140,7 +145,7 @@ class BertTrainer(object):
         # loss
         x, y = self.get_mapping_xy()
         preds = self.discriminator(x)
-        loss = F.binary_cross_entropy(preds, 1 - y)
+        loss = F.binary_cross_entropy(preds, 1 - y.to(self.device))
         loss = self.args.dis_lambda * loss
 
         # check NaN
@@ -151,11 +156,11 @@ class BertTrainer(object):
         # optim
         self.map_optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm(self.mapping.parameters(), self.args.map_clip_weights)
+        torch.nn.utils.clip_grad_norm_(self.mapping.parameters(), self.args.map_clip_weights)
         self.map_optimizer.step()
         self.orthogonalize()
 
-        return x.size(0).item()
+        return x.size(0)
 
     def procrustes(self):
         """
@@ -174,7 +179,10 @@ class BertTrainer(object):
         Orthogonalize the mapping.
         """
         if self.args.map_beta > 0:
-            W = self.mapping.weight.data
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                W = self.mapping.module.weight.data
+            else:
+                W = self.mapping.weight.data
             beta = self.args.map_beta
             W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
 
@@ -212,7 +220,10 @@ class BertTrainer(object):
             self.best_valid_metric = sent_sim
             logger.info('### New record (sentence similarity): {:.2f}% ###'.format(sent_sim*100))
             # save the mapping
-            W = self.mapping.weight.data.cpu().numpy()
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                W = self.mapping.module.weight.data.cpu().numpy()
+            else:
+                W = self.mapping.weight.data.cpu().numpy()
             path = os.path.join(self.args.model_path, 'best_mapping.pkl')
             logger.info('* Saving the mapping to %s ...' % path)
             torch.save(W, path)

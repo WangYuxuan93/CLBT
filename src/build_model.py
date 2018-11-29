@@ -51,7 +51,7 @@ def build_model(args, with_dis):
         n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')
-    logger.info("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
+    print("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
 
     bert_config = BertConfig.from_json_file(args.bert_config_file)
     model = BertModel(bert_config)
