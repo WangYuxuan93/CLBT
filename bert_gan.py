@@ -14,7 +14,7 @@ import numpy as np
 import torch
 
 from src.utils import bool_flag, initialize_exp
-from src.load import load
+from src.load import load, load_single
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
 from src.bert_evaluator import BertEvaluator
@@ -32,26 +32,25 @@ def main():
 
     # self.mapping
     parser.add_argument("--map_id_init", type=bool_flag, default=True, help="Initialize the self.mapping as an identity matrix")
-    parser.add_argument("--map_beta", type=float, default=0.001, help="Beta for orthogonalization")
+    parser.add_argument("--map_beta", type=float, default=0.01, help="Beta for orthogonalization")
     parser.add_argument("--map_clip_weights", type=float, default=5, help="Clip self.mapping weights")
     # self.discriminator
-    parser.add_argument("--dis_layers", type=int, default=2, help="self.discriminator layers")
+    parser.add_argument("--dis_layers", type=int, default=3, help="self.discriminator layers")
     parser.add_argument("--dis_hid_dim", type=int, default=2048, help="self.discriminator hidden layer dimensions")
     parser.add_argument("--dis_dropout", type=float, default=0., help="self.discriminator dropout")
     parser.add_argument("--dis_input_dropout", type=float, default=0.1, help="self.discriminator input dropout")
     parser.add_argument("--dis_steps", type=int, default=5, help="self.discriminator steps")
     parser.add_argument("--dis_lambda", type=float, default=1, help="self.discriminator loss feedback coefficient")
-    parser.add_argument("--dis_most_frequent", type=int, default=75000, help="Select embeddings of the k most frequent words for discrimination (0 to disable)")
-    parser.add_argument("--dis_smooth", type=float, default=0.1, help="self.discriminator smooth predictions")
+    parser.add_argument("--dis_smooth", type=float, default=0.2, help="self.discriminator smooth predictions")
     parser.add_argument("--dis_clip_weights", type=float, default=5, help="Clip self.discriminator weights")
+    parser.add_argument("--dis_lr_decay", type=float, default=0.98, help="Discriminator learning rate decay (SGD only)")
     # training adversarial
     parser.add_argument("--adversarial", type=bool_flag, default=True, help="Use adversarial training")
     parser.add_argument("--n_epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("--epoch_size", type=int, default=1000000, help="Iterations per epoch")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--map_optimizer", type=str, default="sgd,lr=0.1", help="self.mapping optimizer")
     parser.add_argument("--dis_optimizer", type=str, default="sgd,lr=0.1", help="self.discriminator optimizer")
-    parser.add_argument("--lr_decay", type=float, default=0.98, help="Learning rate decay (SGD only)")
+    parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate decay (SGD only)") 
     parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
     parser.add_argument("--lr_shrink", type=float, default=0.5, help="Shrink the learning rate if the validation metric decreases (1 to disable)")
     # training refinement
@@ -74,7 +73,8 @@ def main():
                         help="Whether to lower case the input text. Should be True for uncased "
                             "models and False for cased models.")
     parser.add_argument("--dev_sent_num", default=1000, type=int, help="Number of sentence pair for development(sentence similarity).")
-    parser.add_argument("--print_every_dis_steps", default=100, type=int, help="Print every ? self.mapping steps.")
+    parser.add_argument("--print_every_dis_steps", default=100, type=int, help="Print every ? self.discriminator steps.")
+    parser.add_argument("--save_every_dis_steps", default=1000, type=int, help="Save every ? self.discriminator steps.")
     parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
     parser.add_argument("--rm_stop_words", default=False, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
@@ -91,7 +91,7 @@ def main():
 
     advbert = AdvBert(args)
 
-    if args.adversarial:
+    if not args.pred and args.adversarial:
         advbert.train_adv()
 
     if args.n_refinement > 0:
@@ -113,8 +113,10 @@ class AdvBert(object):
         assert 0 < self.args.lr_shrink <= 1
         if self.args.adversarial:
             assert self.args.model_path is not None
+        self.dataset = None
         # build model / trainer / evaluator
-        self.logger = initialize_exp(self.args)
+        if not self.args.pred:
+            self.logger = initialize_exp(self.args)
         if self.args.adversarial:
             assert os.path.isfile(self.args.input_file)
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, 
@@ -123,7 +125,8 @@ class AdvBert(object):
                     local_rank=self.args.local_rank)
         self.bert_model, self.mapping, self.discriminator = build_model(self.args, True)
         self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, self.args)
-        self.evaluator = BertEvaluator(self.trainer, self.features)
+        if self.args.adversarial:
+            self.evaluator = BertEvaluator(self.trainer, self.features)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
@@ -165,22 +168,26 @@ class AdvBert(object):
 
                 # log stats
                 if n_dis_step % self.args.print_every_dis_steps == 0:
-                    stats_str = [('DIS_COSTS', 'self.discriminator loss')]
+                    stats_str = [('DIS_COSTS', 'Discriminator loss')]
                     stats_log = ['%s: %.4f' % (v, np.mean(stats[k]))
                                  for k, v in stats_str if len(stats[k]) > 0]
                     stats_log.append('%i samples/s' % int(n_words_proc / (time.time() - tic)))
-                    self.logger.info(('%06i - ' % n_dis_step) + ' - '.join(stats_log))
+                    self.logger.info(('Step: %06i - ' % n_dis_step) + ' | '.join(stats_log))
 
                     # reset
                     tic = time.time()
                     n_words_proc = 0
                     for k, _ in stats_str:
                         del stats[k][:]
+                if n_dis_step % self.args.save_every_dis_steps == 0:
+                    sent_sim = self.evaluator.sent_sim(rm_stop_words=self.args.rm_stop_words)
+                    self.evaluator.eval_dev_dis()
+                    self.trainer.save_best(sent_sim)
 
             # embeddings / self.discriminator evaluation
-            to_log = OrderedDict({'n_epoch': n_epoch})
+            #to_log = OrderedDict({'n_epoch': n_epoch})
             sent_sim = self.evaluator.sent_sim(rm_stop_words=self.args.rm_stop_words)
-            self.evaluator.eval_dis()
+            self.evaluator.eval_dev_dis()
 
             # JSON log / save best model / end of epoch
             #self.logger.info("__log__:%s" % json.dumps(to_log))
@@ -189,6 +196,7 @@ class AdvBert(object):
 
             # update the learning rate (stop if too small)
             self.trainer.update_lr(sent_sim)
+            #self.trainer.update_dis_lr(sent_sim)
             if self.trainer.map_optimizer.param_groups[0]['lr'] < self.args.min_lr:
                 self.logger.info('Learning rate < 1e-6. BREAK.')
                 break
@@ -225,7 +233,7 @@ class AdvBert(object):
         assert self.args.output_file is not None
 
         self.trainer.reload_best()
-        self.pred_dataset, unique_id_to_feature, self.test_features = load_single(self.args.vocab_file, 
+        pred_dataset, unique_id_to_feature, features = load_single(self.args.vocab_file, 
                         self.args.src_file, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
                         max_seq_length=self.args.max_seq_length, 
@@ -246,20 +254,20 @@ class AdvBert(object):
                     feature = features[example_index.item()]
                     unique_id = int(feature.unique_id)
                     # feature = unique_id_to_feature[unique_id]
-                    output_json = collections.OrderedDict()
+                    output_json = OrderedDict()
                     output_json["linex_index"] = unique_id
                     all_out_features = []
                     for (i, token) in enumerate(feature.tokens):
                         all_layers = []
                         layer_output = mapped_encoder_layer.detach().cpu().numpy()
                         layer_output = layer_output[b]
-                        layers = collections.OrderedDict()
-                        layers["index"] = layer_index
+                        layers = OrderedDict()
+                        layers["index"] = self.args.bert_layer
                         layers["values"] = [
                             round(x.item(), 6) for x in layer_output[i]
                         ]
                         all_layers.append(layers)
-                        out_features = collections.OrderedDict()
+                        out_features = OrderedDict()
                         out_features["token"] = token
                         out_features["layers"] = all_layers
                         all_out_features.append(out_features)

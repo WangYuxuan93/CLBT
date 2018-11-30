@@ -29,11 +29,12 @@ class BertTrainer(object):
         Initialize trainer script.
         """
         self.bert_model = bert_model
-        self.dataset = dataset
-        #sampler = SequentialSampler(dataset)
-        sampler = RandomSampler(dataset)
-        self.dataloader = DataLoader(dataset, sampler=sampler, batch_size=args.batch_size)
-        self.iter_loader = _DataLoaderIter(self.dataloader)
+        if args.adversarial:
+            self.dataset = dataset
+            #sampler = SequentialSampler(dataset)
+            sampler = RandomSampler(dataset)
+            self.dataloader = DataLoader(dataset, sampler=sampler, batch_size=args.batch_size)
+            self.iter_loader = _DataLoaderIter(self.dataloader)
         self.mapping = mapping
         self.discriminator = discriminator
         self.args = args
@@ -57,6 +58,7 @@ class BertTrainer(object):
         self.best_valid_metric = -1e12
 
         self.decrease_lr = False
+        self.decrease_dis_lr = False
 
     def get_mapping_xy(self):
         """
@@ -195,20 +197,44 @@ class BertTrainer(object):
         old_lr = self.map_optimizer.param_groups[0]['lr']
         new_lr = max(self.args.min_lr, old_lr * self.args.lr_decay)
         if new_lr < old_lr:
-            logger.info("### Decreasing learning rate: {:.8f} -> {:.8f} ###".format(old_lr, new_lr))
+            logger.info("Decreasing map learning rate: {:.8f} -> {:.8f}".format(old_lr, new_lr))
             self.map_optimizer.param_groups[0]['lr'] = new_lr
 
         if self.args.lr_shrink < 1 and sent_sim >= -1e7:
             if sent_sim < self.best_valid_metric:
-                logger.info("### Validation metric is smaller than the best: {:.5f} vs {:.5f}".format(sent_sim, self.best_valid_metric))
+                logger.info("Validation metric is smaller than the best: {:.5f} vs {:.5f}".format(sent_sim, self.best_valid_metric))
                 # decrease the learning rate, only if this is the
                 # second time the validation metric decreases
                 if self.decrease_lr:
                     old_lr = self.map_optimizer.param_groups[0]['lr']
                     self.map_optimizer.param_groups[0]['lr'] *= self.args.lr_shrink
-                    logger.info("Shrinking the learning rate: %.5f -> %.5f"
+                    logger.info("Shrinking map learning rate: %.5f -> %.5f"
                                 % (old_lr, self.map_optimizer.param_groups[0]['lr']))
                 self.decrease_lr = True
+
+    def update_dis_lr(self, sent_sim):
+        """
+        Update learning rate when using SGD.
+        """
+        if 'sgd' not in self.args.dis_optimizer:
+            return
+        old_lr = self.dis_optimizer.param_groups[0]['lr']
+        new_lr = max(self.args.min_lr, old_lr * self.args.dis_lr_decay)
+        if new_lr < old_lr:
+            logger.info("Decreasing discriminator learning rate: {:.8f} -> {:.8f}".format(old_lr, new_lr))
+            self.dis_optimizer.param_groups[0]['lr'] = new_lr
+
+        #if self.args.lr_shrink < 1 and sent_sim >= -1e7:
+        #    if sent_sim < self.best_valid_metric:
+                #logger.info("Validation metric is smaller than the best: {:.5f} vs {:.5f}".format(sent_sim, self.best_valid_metric))
+                # decrease the learning rate, only if this is the
+                # second time the validation metric decreases
+        #        if self.decrease_dis_lr:
+        #            old_lr = self.dis_optimizer.param_groups[0]['lr']
+        #            self.dis_optimizer.param_groups[0]['lr'] *= self.args.lr_shrink
+        #            logger.info("Shrinking discriminator learning rate: %.5f -> %.5f"
+        #                        % (old_lr, self.dis_optimizer.param_groups[0]['lr']))
+        #        self.decrease_dis_lr = True
 
     def save_best(self, sent_sim):
         """
@@ -225,7 +251,7 @@ class BertTrainer(object):
             else:
                 W = self.mapping.weight.data.cpu().numpy()
             path = os.path.join(self.args.model_path, 'best_mapping.pkl')
-            logger.info('* Saving the mapping to %s ...' % path)
+            logger.info('### Saving the mapping to %s ... ###' % path)
             torch.save(W, path)
             if self.args.save_dis:
                 torch.save(self.discriminator.state_dict(), os.path.join(self.args.model_path, 'discriminator.pkl'))
@@ -235,7 +261,7 @@ class BertTrainer(object):
         Reload the best mapping.
         """
         path = os.path.join(self.args.model_path, 'best_mapping.pkl')
-        logger.info('* Reloading the best model from %s ...' % path)
+        logger.info('### Reloading the best model from %s ... ###' % path)
         # reload the model
         assert os.path.isfile(path)
         to_reload = torch.from_numpy(torch.load(path))

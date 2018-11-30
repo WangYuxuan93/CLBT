@@ -56,10 +56,13 @@ class BertEvaluator(object):
             self.device = torch.device("cuda", self.args.local_rank)
 	# "!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"
         self.punc = ""
+        self.stop_words_a = ""
+        self.stop_words_b = ""
         if self.args.rm_punc:
             self.punc = string.punctuation
-        self.stop_words_a = self.load_stop_words(self.args.stop_words_src)
-        self.stop_words_b = self.load_stop_words(self.args.stop_words_tgt)
+        if self.args.rm_stop_words:
+            self.stop_words_a = self.load_stop_words(self.args.stop_words_src)
+            self.stop_words_b = self.load_stop_words(self.args.stop_words_tgt)
 
     def get_bert(self, input_ids, input_mask, bert_layer=-1):
         """
@@ -89,14 +92,14 @@ class BertEvaluator(object):
                 return fi.read().strip().split('\n')
         else:
             logger.info("### Stop word file {} does not exist! ###".format(file))
-            return None
+            return ""
 
     def rm_stop_words(self, tokens, embs, stop_words):
         """
         Remove stop words
         """
         assert len(tokens) == len(embs)
-        if stop_words is None:
+        if stop_words is None and self.punc is None:
             return tokens, embs
         new_toks = []
         new_embs = []
@@ -104,7 +107,7 @@ class BertEvaluator(object):
             if tok not in stop_words and tok not in self.punc:
                 new_toks.append(tok)
                 new_embs.append(emb)
-        return new_toks, new_embs
+        return new_toks, np.array(new_embs)
 
     def cos_sim(self, a, b):
         return np.inner(a, b)/(norm(a)*norm(b))
@@ -114,6 +117,7 @@ class BertEvaluator(object):
         Run all evaluations.
         """
         similarities = []
+        fo = open(self.args.model_path+'/'+'similarities.txt' ,'w')
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
@@ -126,15 +130,19 @@ class BertEvaluator(object):
                 seq_len_a = np.sum(input_mask_a[i].data.cpu().numpy())
                 seq_len_b = np.sum(input_mask_b[i].data.cpu().numpy())
                 # [seq_len, output_dim]
-                src_emb = src_bert[i][:seq_len_a]
-                tgt_emb = tgt_bert[i][:seq_len_b]
-                if rm_stop_words:
-                    src_emb, src_toks = self.rm_stop_words(feature.tokens_a, src_emb, self.stop_words_a)
-                    tgt_emb, tgt_toks = self.rm_stop_words(feature.tokens_b, tgt_emb, self.stop_words_b)
+                src_emb = src_bert[i][1:seq_len_a-1]
+                tgt_emb = tgt_bert[i][1:seq_len_b-1]
+                if rm_stop_words or self.args.rm_punc:
+                    src_toks, src_emb = self.rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a)
+                    tgt_toks, tgt_emb = self.rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b)
+                if len(src_emb) == 0 or len(tgt_emb) == 0:
+                    continue
                 similarities.append(self.cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
+        #print ("sent sim:", similarities)
         sim_mean = np.mean(similarities)
-        logger.info("### Mean sentence similarity: {:.2f}% ###".format(sim_mean*100))
-
+        logger.info("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
+        
         return sim_mean
 
     def eval_dis(self):
@@ -168,3 +176,31 @@ class BertEvaluator(object):
         #to_log['dis_acc'] = dis_acc
         #to_log['dis_src_pred'] = src_pred
         #to_log['dis_tgt_pred'] = tgt_pred
+
+    def eval_dev_dis(self):
+        """
+        Evaluate discriminator predictions and accuracy.
+        """
+        src_preds = []
+        tgt_preds = []
+
+        self.discriminator.eval()
+        for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
+            src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
+                                    bert_layer=self.args.bert_layer)
+            tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
+                                    bert_layer=self.args.bert_layer)
+            src_preds.extend(self.discriminator(self.mapping(self.select(src_bert, input_mask_a.to(self.device)))).data.cpu().tolist())
+            tgt_preds.extend(self.discriminator(self.select(tgt_bert, input_mask_b.to(self.device))).data.cpu().tolist())
+
+        src_pred = np.mean(src_preds)
+        tgt_pred = np.mean(tgt_preds)
+        logger.info("Discriminator source / target predictions: {:.2f}% / {:.2f}%".format(src_pred*100, tgt_pred*100))
+
+        src_acc = np.mean([x >= 0.5 for x in src_preds])
+        tgt_acc = np.mean([x < 0.5 for x in tgt_preds])
+        dis_acc = ((src_acc * len(src_preds) + tgt_acc * len(tgt_preds)) /
+                    (len(src_preds) + len(tgt_preds)))
+        logger.info("Discriminator source / target / global accuracy: {:.2f}% / {:.2f}% / {:.2f}%".format(src_acc*100, tgt_acc*100, dis_acc*100))
+
+
