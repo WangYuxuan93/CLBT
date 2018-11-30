@@ -316,6 +316,110 @@ def load_single(vocab_file, input_file, batch_size=32, do_lower_case=True,
 
     return dataset, unique_id_to_feature, features
 
+def convert_sents_to_features(sents, seq_length, tokenizer):
+    """Loads a data file into a list of `InputBatch`s."""
+
+    examples = []
+    unique_id = 0
+    for sent in sents:
+        sent = [w.lower() for w in sent]
+        examples.append(InputExample(unique_id=unique_id, text_a=sent, text_b=None))
+        unique_id += 1
+
+    features = []
+    for (ex_index, example) in enumerate(examples):
+        #tokens_a = tokenizer.tokenize(example.text_a)
+        tokens_a = []
+        for token in example.text_a:
+            for sub_token in tokenizer.wordpiece_tokenizer.tokenize(token):
+                tokens_a.append(sub_token)
+
+        tokens_b = None
+        if example.text_b:
+            tokens_b = tokenizer.tokenize(example.text_b)
+
+        if tokens_b:
+            # Modifies `tokens_a` and `tokens_b` in place so that the total
+            # length is less than the specified length.
+            # Account for [CLS], [SEP], [SEP] with "- 3"
+            _truncate_seq_pair(tokens_a, tokens_b, seq_length - 3)
+        else:
+            # Account for [CLS] and [SEP] with "- 2"
+            if len(tokens_a) > seq_length - 2:
+                tokens_a = tokens_a[0:(seq_length - 2)]
+
+        tokens = []
+        input_type_ids = []
+        tokens.append("[CLS]")
+        input_type_ids.append(0)
+        for token in tokens_a:
+            tokens.append(token)
+            input_type_ids.append(0)
+        tokens.append("[SEP]")
+        input_type_ids.append(0)
+
+        if tokens_b:
+            for token in tokens_b:
+                tokens.append(token)
+                input_type_ids.append(1)
+            tokens.append("[SEP]")
+            input_type_ids.append(1)
+
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask = [1] * len(input_ids)
+
+        # Zero-pad up to the sequence length.
+        while len(input_ids) < seq_length:
+            input_ids.append(0)
+            input_mask.append(0)
+            input_type_ids.append(0)
+
+        assert len(input_ids) == seq_length
+        assert len(input_mask) == seq_length
+        assert len(input_type_ids) == seq_length
+
+        if ex_index < 5:
+            logger.info("*** Example ***")
+            logger.info("unique_id: %s" % (example.unique_id))
+            logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
+            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+            logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+            logger.info(
+                "input_type_ids: %s" % " ".join([str(x) for x in input_type_ids]))
+
+        features.append(
+            InputFeatures(
+                unique_id=example.unique_id,
+                tokens=tokens,
+                input_ids=input_ids,
+                input_mask=input_mask,
+                input_type_ids=input_type_ids))
+    return features
+
+def convert(vocab_file, sents, batch_size=32, do_lower_case=True, 
+            max_seq_length=128, local_rank=-1):
+
+    tokenizer = tokenization.FullTokenizer(
+        vocab_file=vocab_file, do_lower_case=do_lower_case)
+
+    features = convert_sents_to_features(
+        sents=sents, seq_length=max_seq_length, tokenizer=tokenizer)
+
+    unique_id_to_feature = {}
+    for feature in features:
+        unique_id_to_feature[feature.unique_id] = feature
+
+    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
+
+    dataset = TensorDataset(all_input_ids, all_input_mask, all_example_index)
+
+    return dataset, unique_id_to_feature, features
+
 import sys
 if __name__ == "__main__":
     vocab = sys.argv[1]

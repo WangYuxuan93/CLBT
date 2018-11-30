@@ -100,6 +100,29 @@ def main():
     if args.pred:
         advbert.pred()
 
+class Args(object):
+
+    def __init__(self, model_path= model_path, vocab_file=vocab_file,
+                bert_config_file=bert_config_file, init_checkpoint=init_checkpoint,
+                max_seq_length=max_seq_length, output_file=output_file,
+                bert_layer=-1):
+
+        self.adversarial = False
+        self.pred = True
+        self.no_cuda = False
+        self.local_rank = -1
+        self.batch_size = 32
+        self.do_lower_case = True
+
+        self.vocab_file = vocab_file
+        self.bert_config_file = bert_config_file
+        self.init_checkpoint = init_checkpoint
+        self.model_path = model_path
+        self.max_seq_length = max_seq_length
+        self.output_file = output_file
+        self.bert_layer = bert_layer
+        
+
 class AdvBert(object):
 
     def __init__(self, args):
@@ -172,7 +195,7 @@ class AdvBert(object):
                     stats_log = ['%s: %.4f' % (v, np.mean(stats[k]))
                                  for k, v in stats_str if len(stats[k]) > 0]
                     stats_log.append('%i samples/s' % int(n_words_proc / (time.time() - tic)))
-                    self.logger.info(('Step: %06i - ' % n_dis_step) + ' | '.join(stats_log))
+                    self.logger.info(('Epoch: {:0>3d} | Step: {:0>6d} - '.format(n_epoch, n_dis_step)) + ' | '.join(stats_log))
 
                     # reset
                     tic = time.time()
@@ -235,6 +258,54 @@ class AdvBert(object):
         self.trainer.reload_best()
         pred_dataset, unique_id_to_feature, features = load_single(self.args.vocab_file, 
                         self.args.src_file, batch_size=self.args.batch_size, 
+                        do_lower_case=self.args.do_lower_case, 
+                        max_seq_length=self.args.max_seq_length, 
+                        local_rank=self.args.local_rank)
+        pred_sampler = SequentialSampler(pred_dataset)
+        pred_dataloader = DataLoader(pred_dataset, sampler=pred_sampler, batch_size=self.args.batch_size)
+        self.bert_model.eval()
+        with open(self.args.output_file, "w", encoding='utf-8') as writer:
+            for input_ids, input_mask, example_indices in pred_dataloader:
+                input_ids = input_ids.to(self.device)
+                input_mask = input_mask.to(self.device)
+
+                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+                src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                mapped_encoder_layer = self.trainer.mapping(src_encoder_layer)
+
+                for b, example_index in enumerate(example_indices):
+                    feature = features[example_index.item()]
+                    unique_id = int(feature.unique_id)
+                    # feature = unique_id_to_feature[unique_id]
+                    output_json = OrderedDict()
+                    output_json["linex_index"] = unique_id
+                    all_out_features = []
+                    for (i, token) in enumerate(feature.tokens):
+                        all_layers = []
+                        layer_output = mapped_encoder_layer.detach().cpu().numpy()
+                        layer_output = layer_output[b]
+                        layers = OrderedDict()
+                        layers["index"] = self.args.bert_layer
+                        layers["values"] = [
+                            round(x.item(), 6) for x in layer_output[i]
+                        ]
+                        all_layers.append(layers)
+                        out_features = OrderedDict()
+                        out_features["token"] = token
+                        out_features["layers"] = all_layers
+                        all_out_features.append(out_features)
+                    output_json["features"] = all_out_features
+                    writer.write(json.dumps(output_json) + "\n")
+
+    def list2bert(self, sents):
+        """
+        Map bert of source language to target space
+        """
+        assert self.args.output_file is not None
+
+        self.trainer.reload_best()
+        pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
+                        sents, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
                         max_seq_length=self.args.max_seq_length, 
                         local_rank=self.args.local_rank)
