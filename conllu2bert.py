@@ -36,7 +36,7 @@ def bert(raw_file, bert_file, gpu, layer, model, max_seq='256',batch_size='8'):
   print (cmd)
   os.system(cmd)
 
-def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256,batch_size=8):
+def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8):
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
@@ -97,7 +97,7 @@ def merge(bert_file, merge_file, sents):
         except:
           print ('wrong word id:{}, word:{}'.format(i, sents[n][i]))
       n_tok += len(sents[n])
-      fo.write(json.dumps(merged).encode('utf-8')+b"\n")
+      fo.write(str(json.dumps(merged).encode('utf-8')+b"\n"))
       line = fin.readline()
       n += 1
     print ('Total tokens:{}, UNK tokens:{}'.format(n_tok, n_unk))
