@@ -265,6 +265,9 @@ class BertTrainer(object):
         # reload the model
         assert os.path.isfile(path)
         to_reload = torch.from_numpy(torch.load(path))
-        W = self.mapping.weight.data
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data
+        else:
+            W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))

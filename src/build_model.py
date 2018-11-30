@@ -67,8 +67,10 @@ def build_model(args, with_dis):
     mapping.to(device)
 
     # discriminator
-    discriminator = Discriminator(args, bert_config.hidden_size) if with_dis else None
-    discriminator.to(device)
+    discriminator = None
+    if args.adversarial:
+        discriminator = Discriminator(args, bert_config.hidden_size) if with_dis else None
+        discriminator.to(device)
 
     if args.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
@@ -76,6 +78,7 @@ def build_model(args, with_dis):
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
         mapping = torch.nn.DataParallel(mapping)
-        discriminator = torch.nn.DataParallel(discriminator)
+        if args.adversarial:
+            discriminator = torch.nn.DataParallel(discriminator)
 
     return model, mapping, discriminator

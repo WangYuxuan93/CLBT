@@ -14,7 +14,7 @@ import numpy as np
 import torch
 
 from src.utils import bool_flag, initialize_exp
-from src.load import load, load_single
+from src.load import load, load_single, convert
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
 from src.bert_evaluator import BertEvaluator
@@ -102,10 +102,9 @@ def main():
 
 class Args(object):
 
-    def __init__(self, model_path= model_path, vocab_file=vocab_file,
-                bert_config_file=bert_config_file, init_checkpoint=init_checkpoint,
-                max_seq_length=max_seq_length, output_file=output_file,
-                bert_layer=-1):
+    def __init__(self, model_path, vocab_file,
+                bert_config_file, init_checkpoint, output_file,
+                max_seq_length=128, bert_layer=-1):
 
         self.adversarial = False
         self.pred = True
@@ -129,12 +128,12 @@ class AdvBert(object):
 
         self.args = args
         # check parameters
-        assert 0 <= self.args.dis_dropout < 1
-        assert 0 <= self.args.dis_input_dropout < 1
-        assert 0 <= self.args.dis_smooth < 0.5
-        assert self.args.dis_lambda > 0 and self.args.dis_steps > 0
-        assert 0 < self.args.lr_shrink <= 1
         if self.args.adversarial:
+            assert 0 <= self.args.dis_dropout < 1
+            assert 0 <= self.args.dis_input_dropout < 1
+            assert 0 <= self.args.dis_smooth < 0.5
+            assert self.args.dis_lambda > 0 and self.args.dis_steps > 0
+            assert 0 < self.args.lr_shrink <= 1
             assert self.args.model_path is not None
         self.dataset = None
         # build model / trainer / evaluator
