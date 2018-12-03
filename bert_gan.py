@@ -18,6 +18,7 @@ from src.load import load, load_single, convert
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
 from src.bert_evaluator import BertEvaluator
+from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 def main():
@@ -161,9 +162,10 @@ class AdvBert(object):
                     do_lower_case=self.args.do_lower_case, max_seq_length=self.args.max_seq_length, 
                     local_rank=self.args.local_rank, vocab_file1=self.args.vocab_file1)
         self.bert_model, self.mapping, self.discriminator, self.bert_model1 = build_model(self.args, True)
-        self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, 
+
+        if self.args.adversarial:
+            self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, 
                                     self.args, bert_model1=self.bert_model1)
-        if self.args.adversarial or self.sent_sim:
             self.evaluator = BertEvaluator(self.trainer, self.features)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
@@ -362,6 +364,22 @@ class AdvBert(object):
                     output_json["features"] = all_out_features
                     writer.write(json.dumps(output_json) + "\n")
 
+    def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
+        """
+        Get BERT
+        """
+        with torch.no_grad():
+            if model_id = 0 or self.bert_model1 is None:
+                self.bert_model.eval()
+                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            else:
+                self.bert_model1.eval()
+                all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
+            encoder_layer = all_encoder_layers[bert_layer]
+        
+        # [batch_size, seq_len, output_dim]
+        return encoder_layer
+
     def calculate_sim(self):
         """
         Learning loop for Adversarial Training
@@ -373,6 +391,15 @@ class AdvBert(object):
         train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
         n_sent = 0
 
+        self.punc = ""
+        self.stop_words_a = ""
+        self.stop_words_b = ""
+        if self.args.rm_punc:
+            self.punc = string.punctuation
+        if self.args.rm_stop_words:
+            self.stop_words_a = load_stop_words(self.args.stop_words_src)
+            self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
+
         with open(self.args.model_path+'/'+'similarities.txt' ,'w') as fo:
             for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
                 input_ids_a = input_ids_a.to(self.device)
@@ -380,10 +407,10 @@ class AdvBert(object):
                 input_ids_b = input_ids_b.to(self.device)
                 input_mask_b = input_mask_b.to(self.device)
 
-                src_bert = self.evaluator.get_bert(input_ids_a, input_mask_a, 
-                                                bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()
-                tgt_bert = self.evaluator.get_bert(input_ids_b, input_mask_b, 
-                                                bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
+                src_bert = self.get_bert(input_ids_a, input_mask_a, 
+                                        bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()
+                tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
+                                        bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
                 similarities = []
                 for i, example_index in enumerate(example_indices):
                     n_sent += 1
@@ -396,11 +423,11 @@ class AdvBert(object):
                     src_emb = src_bert[i][1:seq_len_a-1]
                     tgt_emb = tgt_bert[i][1:seq_len_b-1]
                     if rm_stop_words or self.args.rm_punc:
-                        src_toks, src_emb = self.evaluator.rm_stop_words(feature.tokens_a[1:-1], src_emb, self.evaluator.stop_words_a)
-                        tgt_toks, tgt_emb = self.evaluator.rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.evaluator.stop_words_b)
+                        src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
+                        tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
                     if len(src_emb) == 0 or len(tgt_emb) == 0:
                         continue
-                    similarities.append(self.evaluator.cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                    similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
                     fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
         sim_mean = np.mean(similarities)
         print("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))

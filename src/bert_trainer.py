@@ -89,11 +89,12 @@ class BertTrainer(object):
         """
         Get BERT
         """
-        self.bert_model.eval()
         with torch.no_grad():
             if model_id = 0 or self.bert_model1 is None:
+                self.bert_model.eval()
                 all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
             else:
+                self.bert_model1.eval()
                 all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
             encoder_layer = all_encoder_layers[bert_layer]
         

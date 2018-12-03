@@ -30,6 +30,35 @@ class SubsetSampler(Sampler):
     def __len__(self):
         return len(self.indices)
 
+def load_stop_words(file):
+    """
+    Load stop words
+    """
+    if os.path.exists(file):
+        with open(file, 'r') as fi:
+            return fi.read().strip().split('\n')
+    else:
+        logger.info("### Stop word file {} does not exist! ###".format(file))
+        return ""
+
+def rm_stop_words(tokens, embs, stop_words, puncs):
+    """
+    Remove stop words
+    """
+    assert len(tokens) == len(embs)
+    if stop_words is None and puncs is None:
+        return tokens, embs
+    new_toks = []
+    new_embs = []
+    for tok, emb in zip(tokens, embs):
+        if tok not in stop_words and tok not in puncs:
+            new_toks.append(tok)
+            new_embs.append(emb)
+    return new_toks, np.array(new_embs)
+
+def cos_sim(a, b):
+    return np.inner(a, b)/(norm(a)*norm(b))
+
 class BertEvaluator(object):
 
     def __init__(self, trainer, features):
@@ -62,18 +91,19 @@ class BertEvaluator(object):
         if self.args.rm_punc:
             self.punc = string.punctuation
         if self.args.rm_stop_words:
-            self.stop_words_a = self.load_stop_words(self.args.stop_words_src)
-            self.stop_words_b = self.load_stop_words(self.args.stop_words_tgt)
+            self.stop_words_a = load_stop_words(self.args.stop_words_src)
+            self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
 
     def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
         """
         Get BERT
         """
-        self.bert_model.eval()
         with torch.no_grad():
             if model_id = 0 or self.bert_model1 is None:
+                self.bert_model.eval()
                 all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
             else:
+                self.bert_model1.eval()
                 all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
             encoder_layer = all_encoder_layers[bert_layer]
         
@@ -86,35 +116,6 @@ class BertEvaluator(object):
         """
         batch_size, seq_len, emb_dim = list(embed.size())
         return embed.masked_select(mask.byte().view(batch_size, seq_len, 1).expand(-1, -1, emb_dim)).view(-1,emb_dim)
-
-    def load_stop_words(self, file):
-        """
-        Load stop words
-        """
-        if os.path.exists(file):
-            with open(file, 'r') as fi:
-                return fi.read().strip().split('\n')
-        else:
-            logger.info("### Stop word file {} does not exist! ###".format(file))
-            return ""
-
-    def rm_stop_words(self, tokens, embs, stop_words):
-        """
-        Remove stop words
-        """
-        assert len(tokens) == len(embs)
-        if stop_words is None and self.punc is None:
-            return tokens, embs
-        new_toks = []
-        new_embs = []
-        for tok, emb in zip(tokens, embs):
-            if tok not in stop_words and tok not in self.punc:
-                new_toks.append(tok)
-                new_embs.append(emb)
-        return new_toks, np.array(new_embs)
-
-    def cos_sim(self, a, b):
-        return np.inner(a, b)/(norm(a)*norm(b))
 
     def sent_sim(self, rm_stop_words=True):
         """
@@ -137,11 +138,11 @@ class BertEvaluator(object):
                 src_emb = src_bert[i][1:seq_len_a-1]
                 tgt_emb = tgt_bert[i][1:seq_len_b-1]
                 if rm_stop_words or self.args.rm_punc:
-                    src_toks, src_emb = self.rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a)
-                    tgt_toks, tgt_emb = self.rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b)
+                    src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
+                    tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
                 if len(src_emb) == 0 or len(tgt_emb) == 0:
                     continue
-                similarities.append(self.cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
                 fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
         #print ("sent sim:", similarities)
         sim_mean = np.mean(similarities)
