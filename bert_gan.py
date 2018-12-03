@@ -95,6 +95,7 @@ def main():
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
+    parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
     # parse parameters
     args = parser.parse_args()
 
@@ -407,9 +408,13 @@ class AdvBert(object):
                 input_ids_b = input_ids_b.to(self.device)
                 input_mask_b = input_mask_b.to(self.device)
 
-                src_bert = self.get_bert(input_ids_a, input_mask_a, 
+                if self.args.base_embed:
+                    src_bert = self.bert_model.embeddings(input_ids_a, None).data.cpu().numpy()
+                    tgt_bert = self.bert_model1.embeddings(input_ids_b, None).data.cpu().numpy()
+                else:
+                    src_bert = self.get_bert(input_ids_a, input_mask_a, 
                                         bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()
-                tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
+                    tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
                                         bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
                 similarities = []
                 for i, example_index in enumerate(example_indices):
