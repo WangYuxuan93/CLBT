@@ -87,7 +87,7 @@ def main():
     parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
     parser.add_argument("--rm_stop_words", default=False, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
-    parser.add_argument("--rm_punc", default=True, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
+    parser.add_argument("--rm_punc", default=False, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
     parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
