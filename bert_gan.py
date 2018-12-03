@@ -12,6 +12,7 @@ import argparse
 from collections import OrderedDict
 import numpy as np
 import torch
+import string
 
 from src.utils import bool_flag, initialize_exp
 from src.load import load, load_single, convert
@@ -86,7 +87,7 @@ def main():
     parser.add_argument("--local_rank",type=int, default=-1, help = "local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda", default=False, action='store_true', help="Whether not to use CUDA when available")
     parser.add_argument("--rm_stop_words", default=False, action='store_true', help="Whether to remove stop words while evaluating(sentence similarity)")
-    parser.add_argument("--rm_punc", default=True, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
+    parser.add_argument("--rm_punc", default=False, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
     parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
@@ -96,6 +97,7 @@ def main():
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
+    parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
     # parse parameters
     args = parser.parse_args()
 
@@ -154,9 +156,9 @@ class AdvBert(object):
             assert self.args.model_path is not None
         self.dataset = None
         # build model / trainer / evaluator
-        if not self.args.pred:
+        if not self.args.pred and not self.args.sent_sim:
             self.logger = initialize_exp(self.args)
-        if self.args.adversarial or self.sent_sim:
+        if self.args.adversarial or self.args.sent_sim:
             assert os.path.isfile(self.args.input_file)
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, 
                     self.args.input_file, batch_size=self.args.batch_size, 
@@ -386,7 +388,7 @@ class AdvBert(object):
         Learning loop for Adversarial Training
         """
 
-        self.logger.info('----> Calculate Sentence Similarity <----\n\n')
+        print ('----> Calculate Sentence Similarity <----\n\n')
 
         sampler = SequentialSampler(self.dataset)
         train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
@@ -400,8 +402,8 @@ class AdvBert(object):
         if self.args.rm_stop_words:
             self.stop_words_a = load_stop_words(self.args.stop_words_src)
             self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
-
-        with open(self.args.model_path+'/'+'similarities.txt' ,'w') as fo:
+        outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
+        with open(outfile ,'w') as fo:
             for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
                 input_ids_a = input_ids_a.to(self.device)
                 input_mask_a = input_mask_a.to(self.device)
@@ -434,7 +436,8 @@ class AdvBert(object):
                         continue
                     similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
                     fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
-        sim_mean = np.mean(similarities)
+            sim_mean = np.mean(similarities)
+            fo.write("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
         print("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
 
 if __name__ == "__main__":
