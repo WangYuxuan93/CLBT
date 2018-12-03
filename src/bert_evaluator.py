@@ -37,6 +37,7 @@ class BertEvaluator(object):
         Initialize evaluator.
         """
         self.bert_model = trainer.bert_model
+        self.bert_model1 = trainer.bert_model1
         self.mapping = trainer.mapping
         self.discriminator = trainer.discriminator
         self.args = trainer.args
@@ -64,13 +65,16 @@ class BertEvaluator(object):
             self.stop_words_a = self.load_stop_words(self.args.stop_words_src)
             self.stop_words_b = self.load_stop_words(self.args.stop_words_tgt)
 
-    def get_bert(self, input_ids, input_mask, bert_layer=-1):
+    def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
         """
         Get BERT
         """
         self.bert_model.eval()
         with torch.no_grad():
-            all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            if model_id = 0 or self.bert_model1 is None:
+                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            else:
+                all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
             encoder_layer = all_encoder_layers[bert_layer]
         
         # [batch_size, seq_len, output_dim]
@@ -121,9 +125,9 @@ class BertEvaluator(object):
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
-                                    bert_layer=self.args.bert_layer)#.data.cpu().numpy()
+                                    bert_layer=self.args.bert_layer, model_id=0)#.data.cpu().numpy()
             tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
-                                    bert_layer=self.args.bert_layer).data.cpu().numpy()
+                                    bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
             src_bert = self.mapping(src_bert).data.cpu().numpy()
             for i, example_index in enumerate(example_indices):
                 feature = self.features[example_index.item()]
@@ -157,9 +161,9 @@ class BertEvaluator(object):
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dis_loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
-                                    bert_layer=self.args.bert_layer)
+                                    bert_layer=self.args.bert_layer, model_id=0)
             tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
-                                    bert_layer=self.args.bert_layer)
+                                    bert_layer=self.args.bert_layer, model_id=1)
             src_preds.extend(self.discriminator(self.mapping(self.select(src_bert, input_mask_a.to(self.device)))).data.cpu().tolist())
             tgt_preds.extend(self.discriminator(self.select(tgt_bert, input_mask_b.to(self.device))).data.cpu().tolist())
 
@@ -187,9 +191,9 @@ class BertEvaluator(object):
         self.discriminator.eval()
         for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
-                                    bert_layer=self.args.bert_layer)
+                                    bert_layer=self.args.bert_layer, model_id=0)
             tgt_bert = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
-                                    bert_layer=self.args.bert_layer)
+                                    bert_layer=self.args.bert_layer, model_id=1)
             src_preds.extend(self.discriminator(self.mapping(self.select(src_bert, input_mask_a.to(self.device)))).data.cpu().tolist())
             tgt_preds.extend(self.discriminator(self.select(tgt_bert, input_mask_b.to(self.device))).data.cpu().tolist())
 

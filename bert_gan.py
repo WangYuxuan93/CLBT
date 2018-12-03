@@ -64,6 +64,13 @@ def main():
                                 "This specifies the model architecture.")
     parser.add_argument("--init_checkpoint", default=None, type=str, required=True, 
                             help="Initial checkpoint (usually from a pre-trained BERT model).")
+    parser.add_argument("--vocab_file1", default=None, type=str, required=True, 
+                            help="The vocabulary file that the BERT model was trained on.")
+    parser.add_argument("--bert_config_file1", default=None, type=str, required=True,
+                            help="The config json file corresponding to the pre-trained BERT model. "
+                                "This specifies the model architecture.")
+    parser.add_argument("--init_checkpoint1", default=None, type=str, required=True, 
+                            help="Initial checkpoint (usually from a pre-trained BERT model).")
     # Other parameters
     parser.add_argument("--bert_layer", default=-1, type=int)
     parser.add_argument("--max_seq_length", default=128, type=int,
@@ -86,6 +93,7 @@ def main():
     parser.add_argument("--pred", type=bool_flag, default=False, help="Map source bert to target space")
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
+    parser.add_argument("--sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
     # parse parameters
     args = parser.parse_args()
 
@@ -100,11 +108,14 @@ def main():
     if args.pred:
         advbert.pred()
 
+    if args.sent_sim:
+        advbert.calculate_sim()
+
 class Args(object):
 
-    def __init__(self, model_path, vocab_file,
-                bert_config_file, init_checkpoint, output_file,
-                max_seq_length=128, bert_layer=-1):
+    def __init__(self, model_path, vocab_file, bert_config_file, init_checkpoint, 
+                output_file, max_seq_length=128, bert_layer=-1, 
+                vocab_file1=None, bert_config_file1=None, init_checkpoint1=None):
 
         self.adversarial = False
         self.pred = True
@@ -120,6 +131,10 @@ class Args(object):
         self.max_seq_length = max_seq_length
         self.output_file = output_file
         self.bert_layer = bert_layer
+
+        self.vocab_file1 = vocab_file1
+        self.bert_config_file1 = bert_config_file1
+        self.init_checkpoint1 = init_checkpoint1
         
 
 class AdvBert(object):
@@ -139,15 +154,16 @@ class AdvBert(object):
         # build model / trainer / evaluator
         if not self.args.pred:
             self.logger = initialize_exp(self.args)
-        if self.args.adversarial:
+        if self.args.adversarial or self.sent_sim:
             assert os.path.isfile(self.args.input_file)
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, 
                     self.args.input_file, batch_size=self.args.batch_size, 
                     do_lower_case=self.args.do_lower_case, max_seq_length=self.args.max_seq_length, 
-                    local_rank=self.args.local_rank)
-        self.bert_model, self.mapping, self.discriminator = build_model(self.args, True)
-        self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, self.args)
-        if self.args.adversarial:
+                    local_rank=self.args.local_rank, vocab_file1=self.args.vocab_file1)
+        self.bert_model, self.mapping, self.discriminator, self.bert_model1 = build_model(self.args, True)
+        self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, 
+                                    self.args, bert_model1=self.bert_model1)
+        if self.args.adversarial or self.sent_sim:
             self.evaluator = BertEvaluator(self.trainer, self.features)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
@@ -179,8 +195,10 @@ class AdvBert(object):
                 input_ids_b = input_ids_b.to(self.device)
                 input_mask_b = input_mask_b.to(self.device)
 
-                src_bert = self.trainer.get_bert(input_ids_a, input_mask_a, bert_layer=self.args.bert_layer)
-                tgt_bert = self.trainer.get_bert(input_ids_b, input_mask_b, bert_layer=self.args.bert_layer)
+                src_bert = self.trainer.get_bert(input_ids_a, input_mask_a, 
+                                                bert_layer=self.args.bert_layer, model_id=0)
+                tgt_bert = self.trainer.get_bert(input_ids_b, input_mask_b, 
+                                                bert_layer=self.args.bert_layer, model_id=1)
                 self.trainer.dis_step(src_bert, tgt_bert, stats)
 
                 n_dis_step += 1
@@ -343,6 +361,49 @@ class AdvBert(object):
                         all_out_features.append(out_features)
                     output_json["features"] = all_out_features
                     writer.write(json.dumps(output_json) + "\n")
+
+    def calculate_sim(self):
+        """
+        Learning loop for Adversarial Training
+        """
+
+        self.logger.info('----> Calculate Sentence Similarity <----\n\n')
+
+        sampler = SequentialSampler(self.dataset)
+        train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
+        n_sent = 0
+
+        with open(self.args.model_path+'/'+'similarities.txt' ,'w') as fo:
+            for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
+                input_ids_a = input_ids_a.to(self.device)
+                input_mask_a = input_mask_a.to(self.device)
+                input_ids_b = input_ids_b.to(self.device)
+                input_mask_b = input_mask_b.to(self.device)
+
+                src_bert = self.evaluator.get_bert(input_ids_a, input_mask_a, 
+                                                bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()
+                tgt_bert = self.evaluator.get_bert(input_ids_b, input_mask_b, 
+                                                bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
+                similarities = []
+                for i, example_index in enumerate(example_indices):
+                    n_sent += 1
+                    if n_sent % 1000 == 0:
+                        print ("\r{}".format(n_sent),end="")
+                    feature = self.features[example_index.item()]
+                    seq_len_a = np.sum(input_mask_a[i].data.cpu().numpy())
+                    seq_len_b = np.sum(input_mask_b[i].data.cpu().numpy())
+                    # [seq_len, output_dim]
+                    src_emb = src_bert[i][1:seq_len_a-1]
+                    tgt_emb = tgt_bert[i][1:seq_len_b-1]
+                    if rm_stop_words or self.args.rm_punc:
+                        src_toks, src_emb = self.evaluator.rm_stop_words(feature.tokens_a[1:-1], src_emb, self.evaluator.stop_words_a)
+                        tgt_toks, tgt_emb = self.evaluator.rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.evaluator.stop_words_b)
+                    if len(src_emb) == 0 or len(tgt_emb) == 0:
+                        continue
+                    similarities.append(self.evaluator.cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                    fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
+        sim_mean = np.mean(similarities)
+        print("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
 
 if __name__ == "__main__":
   main()

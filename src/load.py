@@ -67,7 +67,7 @@ class BiInputFeatures(object):
         self.input_mask_a, self.input_mask_b = input_mask
         self.input_lan_ids_a, self.input_lan_ids_b = input_lan_ids
 
-def convert_examples_to_features(examples, seq_length, tokenizer):
+def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=None):
     """Loads a data file into a list of `InputBatch`s."""
 
     features = []
@@ -75,7 +75,10 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
         if ex_index % 1000 == 0:
             print ("\r%d" % ex_index, end="")
         tokens_a = tokenizer.tokenize(example.text_a)
-        tokens_b = tokenizer.tokenize(example.text_b)
+        if tokenizer1:
+            tokens_b = tokenizer1.tokenize(example.text_b)
+        else:
+            tokens_b = tokenizer.tokenize(example.text_b)
 
         # Account for [CLS] and [SEP] with "- 2"
         if len(tokens_a) > seq_length - 2:
@@ -104,7 +107,10 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
         input_lan_ids_b_.append(1)
 
         input_ids_a_ = tokenizer.convert_tokens_to_ids(tokens_a_)
-        input_ids_b_ = tokenizer.convert_tokens_to_ids(tokens_b_)
+        if tokenizer1:
+            input_ids_b_ = tokenizer1.convert_tokens_to_ids(tokens_b_)
+        else:
+            input_ids_b_ = tokenizer.convert_tokens_to_ids(tokens_b_)
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
@@ -262,15 +268,17 @@ def read_examples(input_file):
     return examples
 
 def load(vocab_file, input_file, batch_size=32, do_lower_case=True, 
-            max_seq_length=128, local_rank=-1):
+            max_seq_length=128, local_rank=-1, vocab_file1=None):
 
     tokenizer = tokenization.FullTokenizer(
         vocab_file=vocab_file, do_lower_case=do_lower_case)
+    tokenizer1 = tokenization.FullTokenizer(
+        vocab_file=vocab_file1, do_lower_case=do_lower_case)
 
     examples = read_examples(input_file)
 
     features = convert_examples_to_features(
-        examples=examples, seq_length=max_seq_length, tokenizer=tokenizer)
+        examples=examples, seq_length=max_seq_length, tokenizer=tokenizer, tokenizer1=tokenizer1)
 
     unique_id_to_feature = {}
     for feature in features:

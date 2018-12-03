@@ -59,6 +59,15 @@ def build_model(args, with_dis):
         model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
     model.to(device)
 
+    model1 = None
+    if args.bert_config_file1 and args.init_checkpoint1:
+        bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+        model1 = BertModel(bert_config1)
+        if args.init_checkpoint is not None:
+            model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
+        model1.to(device)
+        assert bert_config.hidden_size == bert_config1.hidden_size
+
     # mapping
     #mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
     mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
@@ -81,4 +90,4 @@ def build_model(args, with_dis):
         if args.adversarial:
             discriminator = torch.nn.DataParallel(discriminator)
 
-    return model, mapping, discriminator
+    return model, mapping, discriminator, model1

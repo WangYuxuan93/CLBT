@@ -24,11 +24,12 @@ logger = getLogger()
 
 class BertTrainer(object):
 
-    def __init__(self, bert_model, dataset, mapping, discriminator, args):
+    def __init__(self, bert_model, dataset, mapping, discriminator, args, bert_model1=None):
         """
         Initialize trainer script.
         """
         self.bert_model = bert_model
+        self.bert_model1 = bert_model1
         if args.adversarial:
             self.dataset = dataset
             #sampler = SequentialSampler(dataset)
@@ -69,8 +70,10 @@ class BertTrainer(object):
             self.iter_loader = _DataLoaderIter(self.dataloader)
             items = next(self.iter_loader, None)
         input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices = items
-        src_emb = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), bert_layer=self.args.bert_layer)
-        tgt_emb = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), bert_layer=self.args.bert_layer)
+        src_emb = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
+                                bert_layer=self.args.bert_layer, model_id=0)
+        tgt_emb = self.get_bert(input_ids_b.to(self.device), input_mask_b.to(self.device), 
+                                bert_layer=self.args.bert_layer, model_id=1)
         src_emb = self.mapping(src_emb)
         src_len = src_emb.size(0)
         tgt_len = tgt_emb.size(0)
@@ -82,13 +85,16 @@ class BertTrainer(object):
 
         return x,y
 
-    def get_bert(self, input_ids, input_mask, bert_layer=-1):
+    def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
         """
         Get BERT
         """
         self.bert_model.eval()
         with torch.no_grad():
-            all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            if model_id = 0 or self.bert_model1 is None:
+                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+            else:
+                all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
             encoder_layer = all_encoder_layers[bert_layer]
         
         # [batch_size, seq_len, output_dim] => [unmasked_len, output_dim]
