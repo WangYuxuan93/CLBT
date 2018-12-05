@@ -97,7 +97,7 @@ def merge(bert_file, merge_file, sents):
         except:
           print ('wrong word id:{}, word:{}'.format(i, sents[n][i]))
       n_tok += len(sents[n])
-      fo.write(str(json.dumps(merged).encode('utf-8')+b"\n"))
+      fo.write(json.dumps(merged)+"\n")
       line = fin.readline()
       n += 1
     print ('Total tokens:{}, UNK tokens:{}'.format(n_tok, n_unk))
@@ -122,5 +122,5 @@ sents = []
 for sent in load_conllu(conll_file):
   sents.append(sent)
 print ("Total {} Sentences".format(len(sents)))
-list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512)
+#list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512)
 merge(bert_file, merge_file, sents)

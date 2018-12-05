@@ -411,8 +411,9 @@ class AdvBert(object):
                 input_mask_b = input_mask_b.to(self.device)
 
                 if self.args.base_embed:
-                    src_bert = self.bert_model.embeddings(input_ids_a, None).data.cpu().numpy()
-                    tgt_bert = self.bert_model1.embeddings(input_ids_b, None).data.cpu().numpy()
+                    src_bert = self.bert_model.module.embeddings(input_ids_a, None)
+                    tgt_bert = self.bert_model1.module.embeddings(input_ids_b, None).data.cpu().numpy()
+                    src_bert = src_bert.data.cpu().numpy()
                 else:
                     src_bert = self.get_bert(input_ids_a, input_mask_a, 
                                         bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()

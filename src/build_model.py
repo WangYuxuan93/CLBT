@@ -87,6 +87,8 @@ def build_model(args, with_dis):
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
         mapping = torch.nn.DataParallel(mapping)
+        if model1:
+            model1 = torch.nn.DataParallel(model1)
         if args.adversarial:
             discriminator = torch.nn.DataParallel(discriminator)
 
