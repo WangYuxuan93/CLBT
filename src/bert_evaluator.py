@@ -14,7 +14,7 @@ import os
 import torch
 from torch.autograd import Variable
 from torch import Tensor as torch_tensor
-from torch.utils.data import Sampler
+from torch.utils.data import TensorDataset, Sampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 logger = getLogger()
@@ -154,11 +154,11 @@ class BertEvaluator(object):
 
     def parallel_sim(self):
 
-        return sent_sim(self.dev_loader, "parallel")
+        return self.sent_sim(self.dev_loader, "parallel")
 
     def nonpara_sim(self):
 
-        return sent_sim(self.nonpara_loader, "non_parallel")
+        return self.sent_sim(self.nonpara_loader, "non_parallel")
 
     def sent_sim(self, loader, type):
         """
@@ -175,18 +175,24 @@ class BertEvaluator(object):
             src_bert = self.mapping(src_bert).data.cpu().numpy()
             for i, example_index in enumerate(example_indices):
                 feature = self.features[example_index.item()]
+                tokens_a = feature.tokens_a
+                if type == "parallel":
+                    tokens_b = feature.tokens_b
+                else:
+                    real_id = example_index.item()+1 if example_index.item()+1 < self.dev_sent_num else 0
+                    tokens_b = self.features[real_id].tokens_b
                 seq_len_a = np.sum(input_mask_a[i].data.cpu().numpy())
                 seq_len_b = np.sum(input_mask_b[i].data.cpu().numpy())
                 # [seq_len, output_dim]
                 src_emb = src_bert[i][1:seq_len_a-1]
                 tgt_emb = tgt_bert[i][1:seq_len_b-1]
                 if self.args.rm_stop_words or self.args.rm_punc:
-                    src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
-                    tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
+                    src_toks, src_emb = rm_stop_words(tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
+                    tgt_toks, tgt_emb = rm_stop_words(tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
                 if len(src_emb) == 0 or len(tgt_emb) == 0:
                     continue
                 similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
-                fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
+                fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(tokens_a)+' ||| '+' '.join(tokens_b)+'\n')
         #print ("sent sim:", similarities)
         sim_mean = np.mean(similarities)
         logger.info("Mean {} sentence similarity: {:.2f}% ".format(type, sim_mean*100))
