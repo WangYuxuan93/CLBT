@@ -243,7 +243,7 @@ class BertTrainer(object):
         #                        % (old_lr, self.dis_optimizer.param_groups[0]['lr']))
         #        self.decrease_dis_lr = True
 
-    def save_best(self, sent_sim):
+    def save_best(self, sent_sim, path=None):
         """
         Save the best model for the given validation metric.
         """
@@ -257,11 +257,31 @@ class BertTrainer(object):
                 W = self.mapping.module.weight.data.cpu().numpy()
             else:
                 W = self.mapping.weight.data.cpu().numpy()
-            path = os.path.join(self.args.model_path, 'best_mapping.pkl')
-            logger.info('### Saving the mapping to %s ... ###' % path)
-            torch.save(W, path)
+            path = path if path else self.args.model_path
+            if not os.path.exists(path):
+                os.makedirs(path)
+            map_path = os.path.join(path, 'best_mapping.pkl')
+            logger.info('### Saving the mapping to {} ... ###'.format(map_path))
+            torch.save(W, map_path)
             if self.args.save_dis:
-                torch.save(self.discriminator.state_dict(), os.path.join(self.args.model_path, 'discriminator.pkl'))
+                torch.save(self.discriminator.state_dict(), os.path.join(path, 'discriminator.pkl'))
+
+    def save_model(self, path, epoch):
+        """
+        Save the model for the given validation metric.
+        """
+        # save the mapping
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data.cpu().numpy()
+        else:
+            W = self.mapping.weight.data.cpu().numpy()
+        if not os.path.exists(path):
+            os.makedirs(path)
+        map_path = os.path.join(path, 'best_mapping.pkl')
+        logger.info('### (End of epoch {}) Saving the mapping to {} ... ###'.format(epoch,map_path))
+        torch.save(W, map_path)
+        if self.args.save_dis:
+            torch.save(self.discriminator.state_dict(), os.path.join(path, 'discriminator.pkl'))
 
     def reload_best(self):
         """
