@@ -91,11 +91,12 @@ def main():
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
     parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
+    parser.add_argument("--eval_non_parallel", default=False, action='store_true', help="Whether to add disorder sentence while evaluating(sentence similarity)")
     # For predict
     parser.add_argument("--pred", type=bool_flag, default=False, help="Map source bert to target space")
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
-    parser.add_argument("--sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
+    parser.add_argument("--cal_sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
     # parse parameters
@@ -112,7 +113,7 @@ def main():
     if args.pred:
         advbert.pred()
 
-    if args.sent_sim:
+    if args.cal_sent_sim:
         advbert.calculate_sim()
 
 class Args(object):
@@ -156,9 +157,9 @@ class AdvBert(object):
             assert self.args.model_path is not None
         self.dataset = None
         # build model / trainer / evaluator
-        if not self.args.pred and not self.args.sent_sim:
+        if not self.args.pred and not self.args.cal_sent_sim:
             self.logger = initialize_exp(self.args)
-        if self.args.adversarial or self.args.sent_sim:
+        if self.args.adversarial or self.args.cal_sent_sim:
             assert os.path.isfile(self.args.input_file)
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, 
                     self.args.input_file, batch_size=self.args.batch_size, 
@@ -187,6 +188,7 @@ class AdvBert(object):
         train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
         # training loop
         for n_epoch in range(self.args.n_epochs):
+            path = os.path.join(self.args.model_path, "epoch-{}".format(n_epoch))
 
             self.logger.info('Starting adversarial training epoch %i...' % n_epoch)
             tic = time.time()
@@ -225,23 +227,25 @@ class AdvBert(object):
                     for k, _ in stats_str:
                         del stats[k][:]
                 if n_dis_step % self.args.save_every_dis_steps == 0:
-                    sent_sim = self.evaluator.sent_sim(rm_stop_words=self.args.rm_stop_words)
+                    metric = self.evaluator.eval_sim()
                     self.evaluator.eval_dev_dis()
-                    self.trainer.save_best(sent_sim)
+                    self.trainer.save_best(metric["para_sim"], path=path)
 
             # embeddings / self.discriminator evaluation
             #to_log = OrderedDict({'n_epoch': n_epoch})
-            sent_sim = self.evaluator.sent_sim(rm_stop_words=self.args.rm_stop_words)
+            metric = self.evaluator.eval_sim()
             self.evaluator.eval_dev_dis()
+            self.trainer.save_best(metric["para_sim"], path=path)
 
             # JSON log / save best model / end of epoch
             #self.logger.info("__log__:%s" % json.dumps(to_log))
-            self.trainer.save_best(sent_sim)
+            if not os.path.exists(path):
+                self.trainer.save_model(path, n_epoch)
             self.logger.info('End of epoch %i.\n\n' % n_epoch)
 
             # update the learning rate (stop if too small)
-            self.trainer.update_lr(sent_sim)
-            #self.trainer.update_dis_lr(sent_sim)
+            self.trainer.update_lr(metric["para_sim"])
+            #self.trainer.update_dis_lr(metric["para_sim"])
             if self.trainer.map_optimizer.param_groups[0]['lr'] < self.args.min_lr:
                 self.logger.info('Learning rate < 1e-6. BREAK.')
                 break
@@ -263,11 +267,11 @@ class AdvBert(object):
             # apply the Procrustes solution
             self.trainer.procrustes()
 
-            sent_sim = self.evaluator.sent_sim(rm_stop_words=self.args.rm_stop_words)
+            metric = self.evaluator.eval_sim()
 
             # JSON log / save best model / end of epoch
             #self.logger.info("__log__:%s" % json.dumps(to_log))
-            self.trainer.save_best(sent_sim)
+            self.trainer.save_best(metric["para_sim"])
             self.logger.info('End of refinement iteration %i.\n\n' % n_iter)
 
     def pred(self):

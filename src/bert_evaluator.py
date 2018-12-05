@@ -77,8 +77,10 @@ class BertEvaluator(object):
         dev_sampler = SubsetSampler(range(self.dev_sent_num))
         self.dev_loader = DataLoader(self.dataset, sampler=dev_sampler, batch_size=self.args.batch_size)
         logger.info("### Development sentence number: {} ###".format(len(dev_sampler)))
-        dis_sampler = SequentialSampler(self.dataset)
-        self.dis_loader = DataLoader(self.dataset, sampler=dis_sampler, batch_size=self.args.batch_size)
+        if self.args.eval_non_parallel:
+            self.nonpara_loader = self.get_nonpara_loader()
+        #dis_sampler = SequentialSampler(self.dataset)
+        #self.dis_loader = DataLoader(self.dataset, sampler=dis_sampler, batch_size=self.args.batch_size)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
@@ -93,6 +95,32 @@ class BertEvaluator(object):
         if self.args.rm_stop_words:
             self.stop_words_a = load_stop_words(self.args.stop_words_src)
             self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
+
+    def get_nonpara_loader(self):
+        """
+        Get nonparaed loader for penalty sent sim
+        """
+        num = self.dev_sent_num
+        all_input_ids_a = torch.tensor([f.input_ids_a for f in self.features[:num]], dtype=torch.long)
+        all_input_ids_b = torch.tensor([f.input_ids_b for f in self.features[:num]], dtype=torch.long)
+        all_input_mask_a = torch.tensor([f.input_mask_a for f in self.features[:num]], dtype=torch.long)
+        all_input_mask_b = torch.tensor([f.input_mask_b for f in self.features[:num]], dtype=torch.long)
+        all_example_index = torch.arange(all_input_ids_a.size(0), dtype=torch.long)
+
+        # move each b sentence to the previous a, move the first b to the last
+        ids_b_0 = all_input_ids_b[:1]
+        all_input_ids_b_ = all_input_ids_b[1:]
+        all_input_ids_b = torch.cat([all_input_ids_b_, ids_b_0], 0)
+        mask_b_0 = all_input_mask_b[:1]
+        all_input_mask_b_ = all_input_mask_b[1:]
+        all_input_mask_b = torch.cat([all_input_mask_b_, mask_b_0], 0)
+
+        nonpara_dataset = TensorDataset(all_input_ids_a, all_input_mask_a, 
+                        all_input_ids_b, all_input_mask_b, all_example_index)
+        nonpara_sampler = SequentialSampler(nonpara_dataset)
+        nonpara_loader = DataLoader(nonpara_dataset, sampler=nonpara_sampler, 
+                                        batch_size=self.args.batch_size)
+        return nonpara_loader
 
     def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
         """
@@ -117,13 +145,28 @@ class BertEvaluator(object):
         batch_size, seq_len, emb_dim = list(embed.size())
         return embed.masked_select(mask.byte().view(batch_size, seq_len, 1).expand(-1, -1, emb_dim)).view(-1,emb_dim)
 
-    def sent_sim(self, rm_stop_words=True):
+    def eval_sim(self):
+
+        metrics = {"para_sim":self.parallel_sim()}
+        if self.args.eval_non_parallel:
+            metrics["nonpara_sim"] = self.nonpara_sim()
+        return metrics
+
+    def parallel_sim(self):
+
+        return sent_sim(self.dev_loader, "parallel")
+
+    def nonpara_sim(self):
+
+        return sent_sim(self.nonpara_loader, "non_parallel")
+
+    def sent_sim(self, loader, type):
         """
         Run all evaluations.
         """
         similarities = []
-        fo = open(self.args.model_path+'/'+'similarities.txt' ,'w')
-        for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in self.dev_loader:
+        fo = open(self.args.model_path+'/'+type+"_similarities.txt" ,'w')
+        for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in loader:
 
             src_bert = self.get_bert(input_ids_a.to(self.device), input_mask_a.to(self.device), 
                                     bert_layer=self.args.bert_layer, model_id=0)#.data.cpu().numpy()
@@ -137,7 +180,7 @@ class BertEvaluator(object):
                 # [seq_len, output_dim]
                 src_emb = src_bert[i][1:seq_len_a-1]
                 tgt_emb = tgt_bert[i][1:seq_len_b-1]
-                if rm_stop_words or self.args.rm_punc:
+                if self.args.rm_stop_words or self.args.rm_punc:
                     src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
                     tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
                 if len(src_emb) == 0 or len(tgt_emb) == 0:
@@ -146,7 +189,7 @@ class BertEvaluator(object):
                 fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
         #print ("sent sim:", similarities)
         sim_mean = np.mean(similarities)
-        logger.info("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
+        logger.info("Mean {} sentence similarity: {:.2f}% ".format(type, sim_mean*100))
         
         return sim_mean
 
