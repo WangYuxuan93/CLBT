@@ -66,10 +66,16 @@ class Trainer(object):
             tgt_ids = tgt_ids.cuda()
 
         # get word embeddings
-        src_emb = self.src_emb(Variable(src_ids, volatile=True))
-        tgt_emb = self.tgt_emb(Variable(tgt_ids, volatile=True))
-        src_emb = self.mapping(Variable(src_emb.data, volatile=volatile))
-        tgt_emb = Variable(tgt_emb.data, volatile=volatile)
+        with torch.no_grad():
+            src_emb = self.src_emb(Variable(src_ids))
+            tgt_emb = self.tgt_emb(Variable(tgt_ids))
+        if volatile:
+            with torch.no_grad():
+                src_emb = self.mapping(Variable(src_emb.data))
+                tgt_emb = Variable(tgt_emb.data)
+        else:
+            src_emb = self.mapping(Variable(src_emb.data))
+            tgt_emb = Variable(tgt_emb.data)
 
         # input / target
         x = torch.cat([src_emb, tgt_emb], 0)
@@ -90,7 +96,7 @@ class Trainer(object):
         x, y = self.get_dis_xy(volatile=True)
         preds = self.discriminator(Variable(x.data))
         loss = F.binary_cross_entropy(preds, y)
-        stats['DIS_COSTS'].append(loss.data[0])
+        stats['DIS_COSTS'].append(loss.item())
 
         # check NaN
         if (loss != loss).data.any():
@@ -223,7 +229,7 @@ class Trainer(object):
             logger.info('* Best value for "%s": %.5f' % (metric, to_log[metric]))
             # save the mapping
             W = self.mapping.weight.data.cpu().numpy()
-            path = os.path.join(self.params.exp_path, 'best_mapping.pth')
+            path = os.path.join(self.params.model_path, 'best_mapping.pth')
             logger.info('* Saving the mapping to %s ...' % path)
             torch.save(W, path)
 
@@ -231,7 +237,7 @@ class Trainer(object):
         """
         Reload the best mapping.
         """
-        path = os.path.join(self.params.exp_path, 'best_mapping.pth')
+        path = os.path.join(self.params.model_path, 'best_mapping.pth')
         logger.info('* Reloading the best model from %s ...' % path)
         # reload the model
         assert os.path.isfile(path)

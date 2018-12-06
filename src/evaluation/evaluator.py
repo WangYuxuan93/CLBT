@@ -214,7 +214,7 @@ class Evaluator(object):
         """
         self.monolingual_wordsim(to_log)
         self.crosslingual_wordsim(to_log)
-        self.word_translation(to_log)
+        #self.word_translation(to_log)
         self.sent_translation(to_log)
         self.dist_mean_cosine(to_log)
 
@@ -229,12 +229,14 @@ class Evaluator(object):
         self.discriminator.eval()
 
         for i in range(0, self.src_emb.num_embeddings, bs):
-            emb = Variable(self.src_emb.weight[i:i + bs].data, volatile=True)
+            with torch.no_grad():
+                emb = Variable(self.src_emb.weight[i:i + bs].data)
             preds = self.discriminator(self.mapping(emb))
             src_preds.extend(preds.data.cpu().tolist())
 
         for i in range(0, self.tgt_emb.num_embeddings, bs):
-            emb = Variable(self.tgt_emb.weight[i:i + bs].data, volatile=True)
+            with torch.no_grad():
+                emb = Variable(self.tgt_emb.weight[i:i + bs].data)
             preds = self.discriminator(emb)
             tgt_preds.extend(preds.data.cpu().tolist())
 

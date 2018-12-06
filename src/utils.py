@@ -439,8 +439,8 @@ def export_embeddings(src_emb, tgt_emb, args):
 
     # text file
     if args.export == "txt":
-        src_path = os.path.join(args.exp_path, 'vectors-%s.txt' % args.src_lang)
-        tgt_path = os.path.join(args.exp_path, 'vectors-%s.txt' % args.tgt_lang)
+        src_path = os.path.join(args.model_path, 'vectors-%s.txt' % args.src_lang)
+        tgt_path = os.path.join(args.model_path, 'vectors-%s.txt' % args.tgt_lang)
         # source embeddings
         logger.info('Writing source embeddings to %s ...' % src_path)
         with io.open(src_path, 'w', encoding='utf-8') as f:
@@ -456,8 +456,8 @@ def export_embeddings(src_emb, tgt_emb, args):
 
     # PyTorch file
     if args.export == "pth":
-        src_path = os.path.join(args.exp_path, 'vectors-%s.pth' % args.src_lang)
-        tgt_path = os.path.join(args.exp_path, 'vectors-%s.pth' % args.tgt_lang)
+        src_path = os.path.join(args.model_path, 'vectors-%s.pth' % args.src_lang)
+        tgt_path = os.path.join(args.model_path, 'vectors-%s.pth' % args.tgt_lang)
         logger.info('Writing source embeddings to %s ...' % src_path)
         torch.save({'dico': args.src_dico, 'vectors': src_emb}, src_path)
         logger.info('Writing target embeddings to %s ...' % tgt_path)
