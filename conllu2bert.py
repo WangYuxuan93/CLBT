@@ -40,7 +40,7 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
-  init_checkpoint = bert_model+'/bert-base-multilingual'
+  init_checkpoint = bert_model+'/bert_model'
   output_file = bert_file
   bert_layer = layer
   max_seq_length = max_seq
@@ -122,5 +122,5 @@ sents = []
 for sent in load_conllu(conll_file):
   sents.append(sent)
 print ("Total {} Sentences".format(len(sents)))
-#list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512)
+list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512)
 merge(bert_file, merge_file, sents)

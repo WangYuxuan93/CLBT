@@ -125,6 +125,7 @@ class Args(object):
         self.adversarial = False
         self.pred = True
         self.no_cuda = False
+        self.cal_sent_sim = False
         self.local_rank = -1
         self.batch_size = 32
         self.do_lower_case = True
@@ -167,9 +168,10 @@ class AdvBert(object):
                     local_rank=self.args.local_rank, vocab_file1=self.args.vocab_file1)
         self.bert_model, self.mapping, self.discriminator, self.bert_model1 = build_model(self.args, True)
 
-        if self.args.adversarial:
+        if self.args.adversarial or self.args.pred:
             self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, 
                                     self.args, bert_model1=self.bert_model1)
+        if self.args.adversarial:
             self.evaluator = BertEvaluator(self.trainer, self.features)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
