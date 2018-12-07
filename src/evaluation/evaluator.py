@@ -10,6 +10,7 @@ from copy import deepcopy
 import numpy as np
 from torch.autograd import Variable
 from torch import Tensor as torch_tensor
+import torch
 
 from . import get_wordsim_scores, get_crosslingual_wordsim_scores, get_wordanalogy_scores
 from . import get_word_translation_accuracy

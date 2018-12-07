@@ -50,6 +50,8 @@ class Trainer(object):
         self.best_valid_metric = -1e12
 
         self.decrease_lr = False
+        self.decrease_dis_lr = False
+
 
     def get_dis_xy(self, volatile):
         """
@@ -223,6 +225,31 @@ class Trainer(object):
                     logger.info("Shrinking the learning rate: %.5f -> %.5f"
                                 % (old_lr, self.map_optimizer.param_groups[0]['lr']))
                 self.decrease_lr = True
+
+    def update_dis_lr(self, to_log, metric):
+        """
+        Update learning rate when using SGD.
+        """
+        if 'sgd' not in self.params.dis_optimizer:
+            return
+        old_lr = self.dis_optimizer.param_groups[0]['lr']
+        new_lr = max(self.params.min_lr, old_lr * self.params.lr_decay)
+        if new_lr < old_lr:
+            logger.info("Decreasing discriminator learning rate: %.8f -> %.8f" % (old_lr, new_lr))
+            self.dis_optimizer.param_groups[0]['lr'] = new_lr
+
+        if self.params.lr_shrink < 1 and to_log[metric] >= -1e7:
+            if to_log[metric] < self.best_valid_metric:
+                logger.info("Validation metric is smaller than the best: %.5f vs %.5f"
+                            % (to_log[metric], self.best_valid_metric))
+                # decrease the learning rate, only if this is the
+                # second time the validation metric decreases
+                if self.decrease_dis_lr:
+                    old_lr = self.dis_optimizer.param_groups[0]['lr']
+                    self.dis_optimizer.param_groups[0]['lr'] *= self.params.lr_shrink
+                    logger.info("Shrinking the discriminator learning rate: %.5f -> %.5f"
+                                % (old_lr, self.dis_optimizer.param_groups[0]['lr']))
+                self.decrease_dis_lr = True
 
     def save_best(self, to_log, metric):
         """

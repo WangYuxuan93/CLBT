@@ -146,6 +146,8 @@ if params.adversarial:
 
         # update the learning rate (stop if too small)
         trainer.update_lr(to_log, VALIDATION_METRIC)
+        trainer.update_dis_lr(to_log, VALIDATION_METRIC)
+
         if trainer.map_optimizer.param_groups[0]['lr'] < params.min_lr:
             logger.info('Learning rate < 1e-6. BREAK.')
             break
