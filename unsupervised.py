@@ -38,7 +38,7 @@ parser.add_argument("--emb_dim", type=int, default=300, help="Embedding dimensio
 parser.add_argument("--max_vocab", type=int, default=200000, help="Maximum vocabulary size (-1 to disable)")
 # mapping
 parser.add_argument("--map_id_init", type=bool_flag, default=True, help="Initialize the mapping as an identity matrix")
-parser.add_argument("--map_beta", type=float, default=0.001, help="Beta for orthogonalization")
+parser.add_argument("--map_beta", type=float, default=0.01, help="Beta for orthogonalization")
 # discriminator
 parser.add_argument("--dis_layers", type=int, default=2, help="Discriminator layers")
 parser.add_argument("--dis_hid_dim", type=int, default=2048, help="Discriminator hidden layer dimensions")
@@ -47,7 +47,7 @@ parser.add_argument("--dis_input_dropout", type=float, default=0.1, help="Discri
 parser.add_argument("--dis_steps", type=int, default=5, help="Discriminator steps")
 parser.add_argument("--dis_lambda", type=float, default=1, help="Discriminator loss feedback coefficient")
 parser.add_argument("--dis_most_frequent", type=int, default=75000, help="Select embeddings of the k most frequent words for discrimination (0 to disable)")
-parser.add_argument("--dis_smooth", type=float, default=0.1, help="Discriminator smooth predictions")
+parser.add_argument("--dis_smooth", type=float, default=0.2, help="Discriminator smooth predictions")
 parser.add_argument("--dis_clip_weights", type=float, default=0, help="Clip discriminator weights (0 to disable)")
 # training adversarial
 parser.add_argument("--adversarial", type=bool_flag, default=True, help="Use adversarial training")
@@ -56,7 +56,7 @@ parser.add_argument("--epoch_size", type=int, default=1000000, help="Iterations 
 parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
 parser.add_argument("--map_optimizer", type=str, default="sgd,lr=0.1", help="Mapping optimizer")
 parser.add_argument("--dis_optimizer", type=str, default="sgd,lr=0.1", help="Discriminator optimizer")
-parser.add_argument("--lr_decay", type=float, default=0.98, help="Learning rate decay (SGD only)")
+parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate decay (SGD only)")
 parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
 parser.add_argument("--lr_shrink", type=float, default=0.5, help="Shrink the learning rate if the validation metric decreases (1 to disable)")
 # training refinement
@@ -66,7 +66,7 @@ parser.add_argument("--dico_eval", type=str, default="default", help="Path to ev
 parser.add_argument("--dico_method", type=str, default='csls_knn_10', help="Method used for dictionary generation (nn/invsm_beta_30/csls_knn_10)")
 parser.add_argument("--dico_build", type=str, default='S2T', help="S2T,T2S,S2T|T2S,S2T&T2S")
 parser.add_argument("--dico_threshold", type=float, default=0, help="Threshold confidence for dictionary generation")
-parser.add_argument("--dico_max_rank", type=int, default=15000, help="Maximum dictionary words rank (0 to disable)")
+parser.add_argument("--dico_max_rank", type=int, default=0, help="Maximum dictionary words rank (0 to disable)")
 parser.add_argument("--dico_min_size", type=int, default=0, help="Minimum generated dictionary size (0 to disable)")
 parser.add_argument("--dico_max_size", type=int, default=0, help="Maximum generated dictionary size (0 to disable)")
 # reload pre-trained embeddings

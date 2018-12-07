@@ -179,7 +179,10 @@ class Trainer(object):
         """
         A = self.src_emb.weight.data[self.dico[:, 0]]
         B = self.tgt_emb.weight.data[self.dico[:, 1]]
-        W = self.mapping.weight.data
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data
+        else:
+            W = self.mapping.weight.data
         M = B.transpose(0, 1).mm(A).cpu().numpy()
         U, S, V_t = scipy.linalg.svd(M, full_matrices=True)
         W.copy_(torch.from_numpy(U.dot(V_t)).type_as(W))
@@ -189,7 +192,10 @@ class Trainer(object):
         Orthogonalize the mapping.
         """
         if self.params.map_beta > 0:
-            W = self.mapping.weight.data
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                W = self.mapping.module.weight.data
+            else:
+                W = self.mapping.weight.data
             beta = self.params.map_beta
             W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
 
@@ -228,8 +234,11 @@ class Trainer(object):
             self.best_valid_metric = to_log[metric]
             logger.info('* Best value for "%s": %.5f' % (metric, to_log[metric]))
             # save the mapping
-            W = self.mapping.weight.data.cpu().numpy()
-            path = os.path.join(self.params.model_path, 'best_mapping.pth')
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                W = self.mapping.module.weight.data.cpu().numpy()
+            else:
+                W = self.mapping.weight.data.cpu().numpy()
+            path = os.path.join(self.params.model_path, 'best_mapping.pkl')
             logger.info('* Saving the mapping to %s ...' % path)
             torch.save(W, path)
 
@@ -237,12 +246,15 @@ class Trainer(object):
         """
         Reload the best mapping.
         """
-        path = os.path.join(self.params.model_path, 'best_mapping.pth')
+        path = os.path.join(self.params.model_path, 'best_mapping.pkl')
         logger.info('* Reloading the best model from %s ...' % path)
         # reload the model
         assert os.path.isfile(path)
         to_reload = torch.from_numpy(torch.load(path))
-        W = self.mapping.weight.data
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data
+        else:
+            W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
 

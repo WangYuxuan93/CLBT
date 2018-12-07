@@ -66,13 +66,18 @@ def build_model(params, with_dis):
     discriminator = Discriminator(params) if with_dis else None
 
     # cuda
-    if params.cuda:
+    if params.cuda: 
         src_emb.cuda()
         if params.tgt_lang:
             tgt_emb.cuda()
         mapping.cuda()
         if with_dis:
             discriminator.cuda()
+        n_gpu = torch.cuda.device_count()
+        if n_gpu > 1:
+            mapping = torch.nn.DataParallel(mapping)
+            if with_dis:
+                discriminator = torch.nn.DataParallel(discriminator)
 
     # normalize embeddings
     params.src_mean = normalize_embeddings(src_emb.weight.data, params.normalize_embeddings)
