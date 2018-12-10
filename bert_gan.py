@@ -98,6 +98,7 @@ def main():
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--cal_sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
+    parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
     # parse parameters
     args = parser.parse_args()
@@ -297,9 +298,15 @@ class AdvBert(object):
                 input_ids = input_ids.to(self.device)
                 input_mask = input_mask.to(self.device)
 
-                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
-                src_encoder_layer = all_encoder_layers[self.args.bert_layer]
-                mapped_encoder_layer = self.trainer.mapping(src_encoder_layer)
+                if self.args.map_input:
+                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, 
+                                                attention_mask=input_mask, input_mapping=self.trainer.mapping)
+                    target_layer = all_encoder_layers[self.args.bert_layer]
+                else:
+                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
+                                                attention_mask=input_mask)
+                    src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                    target_layer = self.trainer.mapping(src_encoder_layer)
 
                 for b, example_index in enumerate(example_indices):
                     feature = features[example_index.item()]
@@ -310,7 +317,7 @@ class AdvBert(object):
                     all_out_features = []
                     for (i, token) in enumerate(feature.tokens):
                         all_layers = []
-                        layer_output = mapped_encoder_layer.detach().cpu().numpy()
+                        layer_output = target_layer.detach().cpu().numpy()
                         layer_output = layer_output[b]
                         layers = OrderedDict()
                         layers["index"] = self.args.bert_layer
@@ -345,9 +352,15 @@ class AdvBert(object):
                 input_ids = input_ids.to(self.device)
                 input_mask = input_mask.to(self.device)
 
-                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
-                src_encoder_layer = all_encoder_layers[self.args.bert_layer]
-                mapped_encoder_layer = self.trainer.mapping(src_encoder_layer)
+                if self.args.map_input:
+                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, 
+                                                attention_mask=input_mask, input_mapping=self.trainer.mapping)
+                    target_layer = all_encoder_layers[self.args.bert_layer]
+                else:
+                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
+                                                attention_mask=input_mask)
+                    src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                    target_layer = self.trainer.mapping(src_encoder_layer)
 
                 for b, example_index in enumerate(example_indices):
                     feature = features[example_index.item()]
@@ -358,7 +371,7 @@ class AdvBert(object):
                     all_out_features = []
                     for (i, token) in enumerate(feature.tokens):
                         all_layers = []
-                        layer_output = mapped_encoder_layer.detach().cpu().numpy()
+                        layer_output = target_layer.detach().cpu().numpy()
                         layer_output = layer_output[b]
                         layers = OrderedDict()
                         layers["index"] = self.args.bert_layer

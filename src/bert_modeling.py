@@ -330,7 +330,7 @@ class BertModel(nn.Module):
         self.encoder = BERTEncoder(config)
         self.pooler = BERTPooler(config)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None, input_mapping=None):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
@@ -352,6 +352,8 @@ class BertModel(nn.Module):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         embedding_output = self.embeddings(input_ids, token_type_ids)
+        if input_mapping:
+            embedding_output = input_mapping(embedding_output)
         all_encoder_layers = self.encoder(embedding_output, extended_attention_mask)
         sequence_output = all_encoder_layers[-1]
         pooled_output = self.pooler(sequence_output)
