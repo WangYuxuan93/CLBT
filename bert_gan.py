@@ -19,7 +19,7 @@ from src.load import load, load_single, convert
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
 from src.bert_evaluator import BertEvaluator
-from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim, get_overlap
+from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim, get_overlaps, get_overlap_sim
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 def main():
@@ -456,12 +456,12 @@ class AdvBert(object):
                         tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
                     # calculate overlap token sim
                     if self.args.overlap_sim:
-                        overlaps = get_overlaps(feature.tokens_a[1:-1], src_emb, feature.tokens_b[1:-1], tgt_emb)
+                        overlaps = get_overlaps(src_toks, src_emb, tgt_toks, tgt_emb)
                         if not overlaps:
                             continue
                         sims, infos = get_overlap_sim(overlaps)
                         similarities.extend([s['sim'] for s in sims])
-                        fo.write('\n'.join(infos)+'\n'+' '.join(src_toks)+' ||| '+' '.join(tgt_toks)+'\n')
+                        fo.write(' | '.join(infos)+'\n'+' '.join(src_toks)+' ||| '+' '.join(tgt_toks)+'\n')
                     # calculate sent sim
                     else:
                         if len(src_emb) == 0 or len(tgt_emb) == 0:

@@ -67,11 +67,11 @@ def get_overlaps(src_toks, src_embs, tgt_toks, tgt_embs):
     tgt_cnt = Counter(tgt_toks)
 
     overlaps = []
-    for src_id, tok, src_emb in enumerate(zip(src_toks, src_embs)):
+    for src_id, (tok, src_emb) in enumerate(zip(src_toks, src_embs)):
         # only return overlap tokens that are unique in both source and target
-        if src_cnt[tok] == 1 and tok in tgt_toks and tgt_cnt[tok] == 1:
+        if not tok == '[UNK]' and src_cnt[tok] == 1 and tok in tgt_toks and tgt_cnt[tok] == 1:
             tgt_id = tgt_toks.index(tok)
-            overlap = {'src_id':src_id, 'tgt_id':tgt_id, 
+            overlap = {'src_id':src_id, 'tgt_id':tgt_id, 'token':tok,
                         'src_emb':src_emb, 'tgt_emb':tgt_embs[tgt_id]}
             overlaps.append(overlap)
     return overlaps
@@ -86,7 +86,7 @@ def get_overlap_sim(overlaps):
         tok_sim = cos_sim(pair['src_emb'], pair['tgt_emb'])
         similarities.append({'src_id':pair['src_id'], 'tgt_id':pair['tgt_id'],
                             'sim':tok_sim})
-        infos.append('src_id:{}, tgt_id:{}, sim:{:.4f}'.format(pair['src_id'], pair['tgt_id'], tok_sim))
+        infos.append('token:\"{}\" (src_id:{}, tgt_id:{}), sim:{:.4f}'.format(pair['token'], pair['src_id'], pair['tgt_id'], tok_sim))
     return similarities, infos
 
 def cos_sim(a, b):
