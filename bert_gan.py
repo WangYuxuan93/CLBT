@@ -19,7 +19,7 @@ from src.load import load, load_single, convert
 from src.build_model import build_model
 from src.bert_trainer import BertTrainer
 from src.bert_evaluator import BertEvaluator
-from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim
+from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim, get_overlap
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 
 def main():
@@ -90,13 +90,14 @@ def main():
     parser.add_argument("--rm_punc", default=False, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
-    parser.add_argument("--save_dis", default=True, action='store_true', help="Whether to save self.discriminator")
+    parser.add_argument("--save_dis", default=False, action='store_true', help="Whether to save self.discriminator")
     parser.add_argument("--eval_non_parallel", default=False, action='store_true', help="Whether to add disorder sentence while evaluating(sentence similarity)")
     # For predict
     parser.add_argument("--pred", type=bool_flag, default=False, help="Map source bert to target space")
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--cal_sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
+    parser.add_argument("--overlap_sim", default=False, action='store_true', help="Calculate similarity of overlap words")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
     parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
@@ -453,13 +454,23 @@ class AdvBert(object):
                     if rm_stop_words or self.args.rm_punc:
                         src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
                         tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
-                    if len(src_emb) == 0 or len(tgt_emb) == 0:
-                        continue
-                    similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
-                    fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
+                    # calculate overlap token sim
+                    if self.args.overlap_sim:
+                        overlaps = get_overlaps(feature.tokens_a[1:-1], src_emb, feature.tokens_b[1:-1], tgt_emb)
+                        if not overlaps:
+                            continue
+                        sims, infos = get_overlap_sim(overlaps)
+                        similarities.extend([s['sim'] for s in sims])
+                        fo.write('\n'.join(infos)+'\n'+' '.join(src_toks)+' ||| '+' '.join(tgt_toks)+'\n')
+                    # calculate sent sim
+                    else:
+                        if len(src_emb) == 0 or len(tgt_emb) == 0:
+                            continue
+                        similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                        fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
             sim_mean = np.mean(similarities)
-            fo.write("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
-        print("Mean sentence similarity: {:.2f}% ".format(sim_mean*100))
+            fo.write("Mean similarity: {:.2f}% ".format(sim_mean*100))
+        print("Mean similarity: {:.2f}% ".format(sim_mean*100))
 
 if __name__ == "__main__":
   main()

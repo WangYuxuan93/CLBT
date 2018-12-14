@@ -16,6 +16,7 @@ from torch.autograd import Variable
 from torch import Tensor as torch_tensor
 from torch.utils.data import TensorDataset, Sampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from collections import Counter
 
 logger = getLogger()
 
@@ -55,6 +56,38 @@ def rm_stop_words(tokens, embs, stop_words, puncs):
             new_toks.append(tok)
             new_embs.append(emb)
     return new_toks, np.array(new_embs)
+
+def get_overlaps(src_toks, src_embs, tgt_toks, tgt_embs):
+    """
+    Get overlaps
+    """
+    assert len(src_toks) == len(src_embs)
+    assert len(tgt_toks) == len(tgt_embs)
+    src_cnt = Counter(src_toks)
+    tgt_cnt = Counter(tgt_toks)
+
+    overlaps = []
+    for src_id, tok, src_emb in enumerate(zip(src_toks, src_embs)):
+        # only return overlap tokens that are unique in both source and target
+        if src_cnt[tok] == 1 and tok in tgt_toks and tgt_cnt[tok] == 1:
+            tgt_id = tgt_toks.index(tok)
+            overlap = {'src_id':src_id, 'tgt_id':tgt_id, 
+                        'src_emb':src_emb, 'tgt_emb':tgt_embs[tgt_id]}
+            overlaps.append(overlap)
+    return overlaps
+
+def get_overlap_sim(overlaps):
+    """
+    Calculate overlap token similarities
+    """
+    similarities = []
+    infos = []
+    for pair in overlaps:
+        tok_sim = cos_sim(pair['src_emb'], pair['tgt_emb'])
+        similarities.append({'src_id':pair['src_id'], 'tgt_id':pair['tgt_id'],
+                            'sim':tok_sim})
+        infos.append('src_id:{}, tgt_id:{}, sim:{:.4f}'.format(pair['src_id'], pair['tgt_id'], tok_sim))
+    return similarities, infos
 
 def cos_sim(a, b):
     return np.inner(a, b)/(norm(a)*norm(b))
