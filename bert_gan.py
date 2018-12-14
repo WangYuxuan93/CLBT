@@ -17,7 +17,7 @@ import string
 from src.utils import bool_flag, initialize_exp
 from src.load import load, load_single, convert
 from src.build_model import build_model
-from src.bert_trainer import BertTrainer
+from src.bert_trainer import BertTrainer, reload_model
 from src.bert_evaluator import BertEvaluator
 from src.bert_evaluator import load_stop_words, rm_stop_words, cos_sim, get_overlaps, get_overlap_sim
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
@@ -97,7 +97,8 @@ def main():
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--cal_sent_sim", type=bool_flag, default=False, help="Calculate sentence similarity?")
-    parser.add_argument("--overlap_sim", default=False, action='store_true', help="Calculate similarity of overlap words")
+    parser.add_argument("--sim_with_map", default=False, action='store_true', help="Calculate similarity with mapping?")
+    parser.add_argument("--overlap_sim", default=False, action='store_true', help="Calculate similarity of overlap words?")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
     parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
@@ -423,6 +424,8 @@ class AdvBert(object):
         if self.args.rm_stop_words:
             self.stop_words_a = load_stop_words(self.args.stop_words_src)
             self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
+        if self.args.sim_with_map:
+            reload_model(self.mapping, self.args.model_path)
         outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
         with open(outfile ,'w') as fo:
             for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
@@ -434,12 +437,15 @@ class AdvBert(object):
                 if self.args.base_embed:
                     src_bert = self.bert_model.module.embeddings(input_ids_a, None)
                     tgt_bert = self.bert_model1.module.embeddings(input_ids_b, None).data.cpu().numpy()
-                    src_bert = src_bert.data.cpu().numpy()
                 else:
                     src_bert = self.get_bert(input_ids_a, input_mask_a, 
-                                        bert_layer=self.args.bert_layer, model_id=0).data.cpu().numpy()
+                                        bert_layer=self.args.bert_layer, model_id=0)
                     tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
                                         bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
+                if self.args.sim_with_map:
+                    src_bert = self.mapping(src_bert)
+                src_bert = src_bert.data.cpu().numpy()
+
                 similarities = []
                 for i, example_index in enumerate(example_indices):
                     n_sent += 1

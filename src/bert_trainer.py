@@ -21,6 +21,21 @@ from torch.utils.data.dataloader import _DataLoaderIter
 
 logger = getLogger()
 
+def reload_model(mapping, model_path):
+    """
+    Reload the best mapping.
+    """
+    path = os.path.join(model_path, 'best_mapping.pkl')
+    logger.info('### Reloading the best model from %s ... ###' % path)
+    # reload the model
+    assert os.path.isfile(path)
+    to_reload = torch.from_numpy(torch.load(path))
+    if isinstance(mapping, torch.nn.DataParallel):
+        W = mapping.module.weight.data
+    else:
+        W = mapping.weight.data
+    assert to_reload.size() == W.size()
+    W.copy_(to_reload.type_as(W))
 
 class BertTrainer(object):
 
