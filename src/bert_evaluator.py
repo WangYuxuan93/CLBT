@@ -295,10 +295,10 @@ class BertEvaluator(object):
 
     def calculate_sim(self, loader):
         """
-        Learning loop for Adversarial Training
+        Calculate similarities
         """
 
-        print ('----> Calculate Sentence Similarity <----\n\n')
+        #print ('----> Calculate Sentence Similarity <----\n\n')
 
         n_sent = 0
         if self.args.sim_with_map:
@@ -337,6 +337,9 @@ class BertEvaluator(object):
                     if self.args.rm_stop_words or self.args.rm_punc:
                         src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
                         tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
+                    else:
+                        src_toks = feature.tokens_a[1:-1]
+                        tgt_toks = feature.tokens_b[1:-1]
                     # calculate overlap token sim
                     if self.args.overlap_sim:
                         overlaps = get_overlaps(src_toks, src_emb, tgt_toks, tgt_emb)
@@ -354,3 +357,4 @@ class BertEvaluator(object):
             sim_mean = np.mean(similarities)
             fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
         print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))
+        return sim_mean
