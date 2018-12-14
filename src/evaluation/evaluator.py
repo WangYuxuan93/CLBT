@@ -196,9 +196,12 @@ class Evaluator(object):
             _params.dico_max_rank = 10000
             _params.dico_min_size = 0
             _params.dico_max_size = dico_max_size
-            s2t_candidates = get_candidates(src_emb, tgt_emb, _params)
-            t2s_candidates = get_candidates(tgt_emb, src_emb, _params)
+            s2t_candidates, s2t_scores = get_candidates(src_emb, tgt_emb, _params)
+            t2s_candidates, t2s_scores = get_candidates(tgt_emb, src_emb, _params)
+            #print ('S2T:\n',s2t_candidates, s2t_scores)
+            #print ('T2S:\n',t2s_candidates, t2s_scores)
             dico = build_dictionary(src_emb, tgt_emb, _params, s2t_candidates, t2s_candidates)
+            #print ('Dico:\n', dico)
             # mean cosine
             if dico is None:
                 mean_cosine = -1e9

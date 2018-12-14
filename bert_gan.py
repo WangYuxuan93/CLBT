@@ -175,8 +175,10 @@ class AdvBert(object):
         if self.args.adversarial or self.args.pred:
             self.trainer = BertTrainer(self.bert_model, self.dataset, self.mapping, self.discriminator, 
                                     self.args, bert_model1=self.bert_model1)
-        if self.args.adversarial:
-            self.evaluator = BertEvaluator(self.trainer, self.features)
+
+        if self.args.adversarial or self.args.cal_sent_sim:
+            self.evaluator = BertEvaluator(self.bert_model, self.dataset, self.mapping, self.discriminator, 
+                                    self.args, self.features, bert_model1=self.bert_model1)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")

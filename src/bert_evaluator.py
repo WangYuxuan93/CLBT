@@ -17,6 +17,7 @@ from torch import Tensor as torch_tensor
 from torch.utils.data import TensorDataset, Sampler
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from collections import Counter
+from src.bert_trainer import reload_model
 
 logger = getLogger()
 
@@ -94,24 +95,26 @@ def cos_sim(a, b):
 
 class BertEvaluator(object):
 
-    def __init__(self, trainer, features):
+    def __init__(self, bert_model, dataset, mapping, discriminator, 
+                    args, features, bert_model1=None ):
         """
         Initialize evaluator.
         """
-        self.bert_model = trainer.bert_model
-        self.bert_model1 = trainer.bert_model1
-        self.mapping = trainer.mapping
-        self.discriminator = trainer.discriminator
-        self.args = trainer.args
-        self.dataset = trainer.dataset
+        self.bert_model = bert_model
+        self.bert_model1 = bert_model1
+        self.mapping = mapping
+        self.discriminator = discriminator
+        self.args = args
+        self.dataset = dataset
         self.features = features
         self.dev_sent_num = self.args.dev_sent_num
-        assert self.dev_sent_num <= len(self.dataset)
-        dev_sampler = SubsetSampler(range(self.dev_sent_num))
-        self.dev_loader = DataLoader(self.dataset, sampler=dev_sampler, batch_size=self.args.batch_size)
-        logger.info("### Development sentence number: {} ###".format(len(dev_sampler)))
-        if self.args.eval_non_parallel:
-            self.nonpara_loader = self.get_nonpara_loader()
+        if self.args.adversarial:
+            assert self.dev_sent_num <= len(self.dataset)
+            dev_sampler = SubsetSampler(range(self.dev_sent_num))
+            self.dev_loader = DataLoader(self.dataset, sampler=dev_sampler, batch_size=self.args.batch_size)
+            logger.info("### Development sentence number: {} ###".format(len(dev_sampler)))
+            if self.args.eval_non_parallel:
+                self.nonpara_loader = self.get_nonpara_loader()
         #dis_sampler = SequentialSampler(self.dataset)
         #self.dis_loader = DataLoader(self.dataset, sampler=dis_sampler, batch_size=self.args.batch_size)
 
@@ -290,4 +293,65 @@ class BertEvaluator(object):
                     (len(src_preds) + len(tgt_preds)))
         logger.info("Discriminator source / target / global accuracy: {:.2f}% / {:.2f}% / {:.2f}%".format(src_acc*100, tgt_acc*100, dis_acc*100))
 
+    def calculate_sim(self, loader):
+        """
+        Learning loop for Adversarial Training
+        """
 
+        print ('----> Calculate Sentence Similarity <----\n\n')
+
+        n_sent = 0
+
+        if self.args.sim_with_map:
+            reload_model(self.mapping, self.args.model_path)
+        outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
+        similarities = []
+        with open(outfile ,'w') as fo:
+            for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in loader:
+                input_ids_a = input_ids_a.to(self.device)
+                input_mask_a = input_mask_a.to(self.device)
+                input_ids_b = input_ids_b.to(self.device)
+                input_mask_b = input_mask_b.to(self.device)
+
+                if self.args.base_embed:
+                    src_bert = self.bert_model.module.embeddings(input_ids_a, None)
+                    tgt_bert = self.bert_model1.module.embeddings(input_ids_b, None).data.cpu().numpy()
+                else:
+                    src_bert = self.get_bert(input_ids_a, input_mask_a, 
+                                        bert_layer=self.args.bert_layer, model_id=0)
+                    tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
+                                        bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
+                if self.args.sim_with_map:
+                    src_bert = self.mapping(src_bert)
+                src_bert = src_bert.data.cpu().numpy()
+
+                for i, example_index in enumerate(example_indices):
+                    n_sent += 1
+                    if n_sent % 1000 == 0:
+                        print ("\r{}".format(n_sent),end="")
+                    feature = self.features[example_index.item()]
+                    seq_len_a = np.sum(input_mask_a[i].data.cpu().numpy())
+                    seq_len_b = np.sum(input_mask_b[i].data.cpu().numpy())
+                    # [seq_len, output_dim]
+                    src_emb = src_bert[i][1:seq_len_a-1]
+                    tgt_emb = tgt_bert[i][1:seq_len_b-1]
+                    if self.args.rm_stop_words or self.args.rm_punc:
+                        src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
+                        tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
+                    # calculate overlap token sim
+                    if self.args.overlap_sim:
+                        overlaps = get_overlaps(src_toks, src_emb, tgt_toks, tgt_emb)
+                        if not overlaps:
+                            continue
+                        sims, infos = get_overlap_sim(overlaps)
+                        similarities.extend([s['sim'] for s in sims])
+                        fo.write(' | '.join(infos)+'\n'+' '.join(src_toks)+' ||| '+' '.join(tgt_toks)+'\n')
+                    # calculate sent sim
+                    else:
+                        if len(src_emb) == 0 or len(tgt_emb) == 0:
+                            continue
+                        similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
+                        fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
+            sim_mean = np.mean(similarities)
+            fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
+        print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))

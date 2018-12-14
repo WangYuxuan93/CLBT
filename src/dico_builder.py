@@ -137,7 +137,7 @@ def get_candidates(emb1, emb2, params):
         mask = mask.unsqueeze(1).expand_as(all_pairs).clone()
         all_pairs = all_pairs.masked_select(mask).view(-1, 2)
 
-    return all_pairs
+    return all_pairs, all_scores
 
 
 def build_dictionary(src_emb, tgt_emb, params, s2t_candidates=None, t2s_candidates=None):
