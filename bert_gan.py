@@ -429,6 +429,7 @@ class AdvBert(object):
         if self.args.sim_with_map:
             reload_model(self.mapping, self.args.model_path)
         outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
+        similarities = []
         with open(outfile ,'w') as fo:
             for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
                 input_ids_a = input_ids_a.to(self.device)
@@ -447,8 +448,7 @@ class AdvBert(object):
                 if self.args.sim_with_map:
                     src_bert = self.mapping(src_bert)
                 src_bert = src_bert.data.cpu().numpy()
-
-                similarities = []
+ 
                 for i, example_index in enumerate(example_indices):
                     n_sent += 1
                     if n_sent % 1000 == 0:
