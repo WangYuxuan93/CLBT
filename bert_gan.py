@@ -475,8 +475,8 @@ class AdvBert(object):
                         similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
                         fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
             sim_mean = np.mean(similarities)
-            fo.write("Mean similarity: {:.2f}% ".format(sim_mean*100))
-        print("Mean similarity: {:.2f}% ".format(sim_mean*100))
+            fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
+        print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))
 
 if __name__ == "__main__":
   main()
