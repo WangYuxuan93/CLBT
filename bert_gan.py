@@ -415,7 +415,10 @@ class AdvBert(object):
         print ('----> Calculate Sentence Similarity <----\n\n')
 
         sampler = SequentialSampler(self.dataset)
-        train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
+        loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
+        self.evaluator.calculate_sim(loader)
+        
+        """
         n_sent = 0
 
         self.punc = ""
@@ -479,6 +482,7 @@ class AdvBert(object):
             sim_mean = np.mean(similarities)
             fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
         print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))
+        """
 
 if __name__ == "__main__":
   main()

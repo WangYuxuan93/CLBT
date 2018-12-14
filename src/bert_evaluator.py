@@ -301,7 +301,6 @@ class BertEvaluator(object):
         print ('----> Calculate Sentence Similarity <----\n\n')
 
         n_sent = 0
-
         if self.args.sim_with_map:
             reload_model(self.mapping, self.args.model_path)
         outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
