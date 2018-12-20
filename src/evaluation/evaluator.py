@@ -109,6 +109,8 @@ class Evaluator(object):
         """
         Evaluation on word translation.
         """
+        if self.params.dico_eval == "default":
+            return
         # mapped word embeddings
         src_emb = self.mapping(self.src_emb.weight).data
         tgt_emb = self.tgt_emb.weight.data
@@ -218,7 +220,7 @@ class Evaluator(object):
         """
         self.monolingual_wordsim(to_log)
         self.crosslingual_wordsim(to_log)
-        #self.word_translation(to_log)
+        self.word_translation(to_log)
         self.sent_translation(to_log)
         self.dist_mean_cosine(to_log)
 

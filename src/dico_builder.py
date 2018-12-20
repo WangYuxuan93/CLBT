@@ -151,10 +151,10 @@ def build_dictionary(src_emb, tgt_emb, params, s2t_candidates=None, t2s_candidat
 
     if s2t:
         if s2t_candidates is None:
-            s2t_candidates = get_candidates(src_emb, tgt_emb, params)
+            s2t_candidates, _ = get_candidates(src_emb, tgt_emb, params)
     if t2s:
         if t2s_candidates is None:
-            t2s_candidates = get_candidates(tgt_emb, src_emb, params)
+            t2s_candidates, _ = get_candidates(tgt_emb, src_emb, params)
         t2s_candidates = torch.cat([t2s_candidates[:, 1:], t2s_candidates[:, :1]], 1)
 
     if params.dico_build == 'S2T':

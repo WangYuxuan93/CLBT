@@ -188,6 +188,7 @@ class Trainer(object):
         M = B.transpose(0, 1).mm(A).cpu().numpy()
         U, S, V_t = scipy.linalg.svd(M, full_matrices=True)
         W.copy_(torch.from_numpy(U.dot(V_t)).type_as(W))
+        logger.info("Finished Procrustes.")
 
     def orthogonalize(self):
         """
@@ -269,6 +270,23 @@ class Trainer(object):
             logger.info('* Saving the mapping to %s ...' % path)
             torch.save(W, path)
 
+    def save_iter(self, iter):
+        """
+        Save the current model.
+        """
+        # best mapping for the given validation criterion
+        # save the mapping
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data.cpu().numpy()
+        else:
+            W = self.mapping.weight.data.cpu().numpy()
+        path = os.path.join(self.params.model_path, 'iter-'+str(iter) , 'best_mapping.pkl')
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        logger.info('* Saving the mapping to %s ...' % path)
+        torch.save(W, path)
+
+
     def reload_best(self):
         """
         Reload the best mapping.
@@ -304,7 +322,8 @@ class Trainer(object):
         bs = 4096
         logger.info("Map source embeddings to the target space ...")
         for i, k in enumerate(range(0, len(src_emb), bs)):
-            x = Variable(src_emb[k:k + bs], volatile=True)
+            with torch.no_grad():
+                x = Variable(src_emb[k:k + bs])
             src_emb[k:k + bs] = self.mapping(x.cuda() if params.cuda else x).data.cpu()
 
         # write embeddings to the disk
