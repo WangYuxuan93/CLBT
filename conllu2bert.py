@@ -108,9 +108,9 @@ def merge(bert_file, merge_file, sents):
     with open(info_file, 'a') as info:
       info.write('File:{}\nTotal tokens:{}, UNK tokens:{}\n\n'.format(merge_file, n_tok, n_unk))
 
-if len(sys.argv) < 7:
-  print ("usage:%s [map_model] [bert_model] [layer(-1)] [conllu file] [output bert] [merged bert]" % sys.argv[0])
-  exit(1)
+#if len(sys.argv) < 7:
+#  print ("usage:%s [map_model] [bert_model] [layer(-1)] [conllu file] [output bert] [merged bert]" % sys.argv[0])
+#  exit(1)
 
 parser = argparse.ArgumentParser(description='CoNLLU to BERT')
 parser.add_argument("bert_model", type=str, default=None, help="bert model")
