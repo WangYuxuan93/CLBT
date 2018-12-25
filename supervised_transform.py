@@ -31,11 +31,12 @@ parser.add_argument("--exp_id", type=str, default="", help="Experiment ID")
 parser.add_argument("--cuda", type=bool_flag, default=True, help="Run on GPU")
 parser.add_argument("--export", type=str, default="txt", help="Export embeddings after training (txt / pth)")
 # supervised sgd learning
-parser.add_argument("--n_epochs", type=int, default=10, help="Number of epochs")
+parser.add_argument("--n_epochs", type=int, default=1000, help="Number of epochs")
 parser.add_argument("--batch_size", type=int, default=1024, help="Batch size")
 parser.add_argument("--map_optimizer", type=str, default="sgd,lr=0.1", help="self.mapping optimizer")
 parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate decay (SGD only)") 
 parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
+parser.add_argument("--quit_after_n_epochs_without_improvement", type=int, default=500, help="Quit after n epochs without improvement")
 # data
 parser.add_argument("--src_lang", type=str, default='en', help="Source language")
 parser.add_argument("--tgt_lang", type=str, default='es', help="Target language")
@@ -89,6 +90,7 @@ logger.info("Validation metric: %s" % VALIDATION_METRIC)
 """
 Learning loop for Procrustes Iterative Learning
 """
+n_without_improvement = 0
 for n_epoch in range(params.n_epochs):
 
     logger.info('Starting epoch %i...' % n_epoch)
@@ -103,6 +105,12 @@ for n_epoch in range(params.n_epochs):
         logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}".format(i, n_inst, cos_sim))
         to_log["avg_cosine_similarity"] += cos_sim
     to_log["avg_cosine_similarity"] /= n_inst
+    if to_log["avg_cosine_similarity"] <= trainer.best_valid_metric:
+        n_without_improvement += 1
+    else:
+        n_without_improvement = 0
+    if n_without_improvement >= params.quit_after_n_epochs_without_improvement:
+        break
     trainer.save_best(to_log, "avg_cosine_similarity")
     logger.info('End of epoch %i.\n\n' % n_epoch)
 
