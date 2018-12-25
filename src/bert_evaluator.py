@@ -358,3 +358,38 @@ class BertEvaluator(object):
             fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
         print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))
         return sim_mean
+
+    def dist_mean_cosine(self, src_emb, tgt_emb, dico_method='nn', dico_build='S2T', dico_max_size=10000):
+        """
+        Mean-cosine model selection criterion.
+        """
+        # get normalized embeddings
+        src_emb = self.mapping(src_emb).data
+        tgt_emb = tgt_emb.data
+        src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
+        tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
+
+        # build dictionary
+        # temp params / dictionary generation
+        _args = deepcopy(self.args)
+        _args.dico_method = dico_method
+        _args.dico_build = dico_build
+        _args.dico_threshold = 0
+        _args.dico_max_rank = 10000
+        _args.dico_min_size = 0
+        _args.dico_max_size = dico_max_size
+        s2t_candidates, s2t_scores = get_candidates(src_emb, tgt_emb, _args)
+        t2s_candidates, t2s_scores = get_candidates(tgt_emb, src_emb, _args)
+        #print ('S2T:\n',s2t_candidates, s2t_scores)
+        #print ('T2S:\n',t2s_candidates, t2s_scores)
+        dico = build_dictionary(src_emb, tgt_emb, _args, s2t_candidates, t2s_candidates)
+        #print ('Dico:\n', dico)
+        # mean cosine
+        if dico is None:
+            mean_cosine = -1e9
+        else:
+            mean_cosine = (src_emb[dico[:dico_max_size, 0]] * tgt_emb[dico[:dico_max_size, 1]]).sum(1).mean()
+        mean_cosine = mean_cosine.item() if isinstance(mean_cosine, torch_tensor) else mean_cosine
+        logger.info("Mean cosine (%s method, %s build, %i max size): %.5f"
+                    % (dico_method, _args.dico_build, dico_max_size, mean_cosine))
+        to_log['mean_cosine-%s-%s-%i' % (dico_method, _args.dico_build, dico_max_size)] = mean_cosine

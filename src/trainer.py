@@ -12,6 +12,8 @@ import scipy.linalg
 import torch
 from torch.autograd import Variable
 from torch.nn import functional as F
+import numpy as np
+import random
 
 from .utils import get_optimizer, load_embeddings, normalize_embeddings, export_embeddings
 from .utils import clip_parameters
@@ -51,6 +53,10 @@ class Trainer(object):
 
         self.decrease_lr = False
         self.decrease_dis_lr = False
+
+        # offset for aligned embeddings (supervised learning)
+        self.offset = 0
+        self.ids = None
 
 
     def get_dis_xy(self, volatile):
@@ -139,6 +145,81 @@ class Trainer(object):
 
         return 2 * self.params.batch_size
 
+    def get_aligned_id_batchs(self, shuffle=True):
+        """
+        Get aligned ids by batch
+        """
+        batches = []
+        # ids for aligned embeddings
+        ids = np.arange(self.dico)
+        if shuffle:
+            ids = random.shuffle(ids)
+        bs = self.params.batch_size
+        assert bs <= min(len(self.src_dico), len(self.tgt_dico))
+        for offset in range(0, len(ids), bs):
+            if self.offset+bs <= len(self.ids):
+                src_ids = self.ids[self.offset:self.offset+bs]
+                tgt_ids = self.ids[self.offset:self.offset+bs]
+            else:
+                src_ids = self.ids[self.offset:]
+                tgt_ids = self.ids[self.offset:]
+            batches.append(zip(src_ids, tgt_ids))
+        return batches
+
+    def get_aligned_embs(self, src_ids, tgt_ids):
+        """
+        Get aligned embeddings.
+        """
+
+        src_ids = torch.LongTensor(self.dico[src_ids, 0])
+        tgt_ids = torch.LongTensor(self.dico[tgt_ids, 1])
+        if self.params.cuda:
+            src_ids = src_ids.cuda()
+            tgt_ids = tgt_ids.cuda()
+
+        # get word embeddings
+        with torch.no_grad():
+            src_emb = self.src_emb(src_ids)
+            tgt_emb = self.tgt_emb(tgt_ids)
+        
+        src_emb = self.mapping(src_emb)
+
+        return src_emb, tgt_emb
+
+    def supervised_mapping_step(self, src_ids, tgt_ids):
+        """
+        Fooling discriminator training step.
+        """
+        self.discriminator.eval()
+
+        # loss
+        src_emb, tgt_emb = self.get_aligned_embs(src_ids, tgt_ids)
+
+        # normalization
+        src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
+        tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
+
+        scores = src_emb.mm(tgt_emb.transpose(0, 1))
+
+        rang = torch.arange(scores.shape[0], out=torch.LongTensor())
+        cos_sims = scores(rang, rang)
+
+        # maximize cosine similarities
+        loss = - cos_sims.mean()
+
+        # check NaN
+        if (loss != loss).data.any():
+            logger.error("NaN detected (fool discriminator)")
+            exit()
+
+        # optim
+        self.map_optimizer.zero_grad()
+        loss.backward()
+        self.map_optimizer.step()
+        self.orthogonalize()
+
+        return loss
+
     def load_training_dico(self, dico_train):
         """
         Load training dictionary.
@@ -201,6 +282,18 @@ class Trainer(object):
                 W = self.mapping.weight.data
             beta = self.params.map_beta
             W.copy_((1 + beta) * W - beta * W.mm(W.transpose(0, 1).mm(W)))
+
+    def decay_map_lr(self):
+        """
+        Update learning rate when using SGD.
+        """
+        if 'sgd' not in self.params.map_optimizer:
+            return
+        old_lr = self.map_optimizer.param_groups[0]['lr']
+        new_lr = max(self.params.min_lr, old_lr * self.params.lr_decay)
+        if new_lr < old_lr:
+            logger.info("Decreasing Mapping learning rate: %.8f -> %.8f" % (old_lr, new_lr))
+            self.map_optimizer.param_groups[0]['lr'] = new_lr
 
     def update_lr(self, to_log, metric):
         """
@@ -285,7 +378,6 @@ class Trainer(object):
             os.makedirs(os.path.dirname(path))
         logger.info('* Saving the mapping to %s ...' % path)
         torch.save(W, path)
-
 
     def reload_best(self):
         """
