@@ -99,8 +99,9 @@ for n_epoch in range(params.n_epochs):
     for i, (src_ids, tgt_ids) in enumerate(batches):
         loss = trainer.supervised_mapping_step(src_ids, tgt_ids)
         n_inst += len(src_ids)
-        logger.info("Step {}, Instances:{}, Loss {:.6f}".format(i, n_inst, loss.cpu().numpy()))
-        to_log["avg_cosine_similarity"] += loss.cpu().numpy()
+        cos_sim = -loss.cpu().detach().numpy()
+        logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}".format(i, n_inst, cos_sim))
+        to_log["avg_cosine_similarity"] += cos_sim
     to_log["avg_cosine_similarity"] /= n_inst
     trainer.save_best(to_log, "avg_cosine_similarity")
     logger.info('End of epoch %i.\n\n' % n_epoch)

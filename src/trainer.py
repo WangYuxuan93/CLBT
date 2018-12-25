@@ -151,19 +151,19 @@ class Trainer(object):
         """
         batches = []
         # ids for aligned embeddings
-        ids = np.arange(self.dico)
+        ids = np.arange(self.dico.shape[0])
         if shuffle:
-            ids = random.shuffle(ids)
+            random.shuffle(ids)
         bs = self.params.batch_size
         assert bs <= min(len(self.src_dico), len(self.tgt_dico))
         for offset in range(0, len(ids), bs):
-            if self.offset+bs <= len(self.ids):
-                src_ids = self.ids[self.offset:self.offset+bs]
-                tgt_ids = self.ids[self.offset:self.offset+bs]
+            if self.offset+bs <= len(ids):
+                src_ids = ids[self.offset:self.offset+bs]
+                tgt_ids = ids[self.offset:self.offset+bs]
             else:
-                src_ids = self.ids[self.offset:]
-                tgt_ids = self.ids[self.offset:]
-            batches.append(zip(src_ids, tgt_ids))
+                src_ids = ids[self.offset:]
+                tgt_ids = ids[self.offset:]
+            batches.append((src_ids, tgt_ids))
         return batches
 
     def get_aligned_embs(self, src_ids, tgt_ids):
@@ -171,8 +171,8 @@ class Trainer(object):
         Get aligned embeddings.
         """
 
-        src_ids = torch.LongTensor(self.dico[src_ids, 0])
-        tgt_ids = torch.LongTensor(self.dico[tgt_ids, 1])
+        src_ids = self.dico[src_ids, 0]
+        tgt_ids = self.dico[tgt_ids, 1]
         if self.params.cuda:
             src_ids = src_ids.cuda()
             tgt_ids = tgt_ids.cuda()
@@ -190,7 +190,6 @@ class Trainer(object):
         """
         Fooling discriminator training step.
         """
-        self.discriminator.eval()
 
         # loss
         src_emb, tgt_emb = self.get_aligned_embs(src_ids, tgt_ids)
@@ -202,7 +201,7 @@ class Trainer(object):
         scores = src_emb.mm(tgt_emb.transpose(0, 1))
 
         rang = torch.arange(scores.shape[0], out=torch.LongTensor())
-        cos_sims = scores(rang, rang)
+        cos_sims = scores[rang, rang]
 
         # maximize cosine similarities
         loss = - cos_sims.mean()
@@ -216,7 +215,7 @@ class Trainer(object):
         self.map_optimizer.zero_grad()
         loss.backward()
         self.map_optimizer.step()
-        self.orthogonalize()
+        #self.orthogonalize()
 
         return loss
 
