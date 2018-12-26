@@ -41,6 +41,7 @@ class Trainer(object):
         # optimizers
         if hasattr(params, 'map_optimizer'):
             optim_fn, optim_params = get_optimizer(params.map_optimizer)
+            print ("Map optimizer parameters: ",optim_params)
             self.map_optimizer = optim_fn(mapping.parameters(), **optim_params)
         if hasattr(params, 'dis_optimizer'):
             optim_fn, optim_params = get_optimizer(params.dis_optimizer)
@@ -186,7 +187,7 @@ class Trainer(object):
 
         return src_emb, tgt_emb
 
-    def supervised_mapping_step(self, src_ids, tgt_ids):
+    def supervised_mapping_step(self, src_ids, tgt_ids, margin=1):
         """
         Fooling discriminator training step.
         """
@@ -201,10 +202,28 @@ class Trainer(object):
         scores = src_emb.mm(tgt_emb.transpose(0, 1))
 
         rang = torch.arange(scores.shape[0], out=torch.LongTensor())
-        cos_sims = scores[rang, rang]
+        # (n)
+        gold_scores = scores[rang, rang]
+        avg_cos_sim = gold_scores.mean()
 
-        # maximize cosine similarities
-        loss = - cos_sims.mean()
+        if self.args.loss == 'cos_sim':
+            # maximize cosine similarities
+            loss = - gold_scores.mean()
+        elif self.args.loss.startswith('max_margin_top'):
+            # max margin with top k elements
+            k = int(self.args.loss.split('-')[1])
+            # (n, k)
+            top_vals, top_ids = scores.topk(k, 1, True)[1]
+            # (n) => (n, k)
+            gold_vals = gold_scores.unsqueeze(1).expand_as(top_vals)
+            # (n, k)
+            margins = ones_like(top_vals) * margin
+            # (n, k)
+            losses = margins - gold_vals + top_vals
+            # mask out less than 0
+            losses = torch.where(losses>0, losses, torch.zeros_like(losses))
+            # ()
+            loss = losses.mean()
 
         # check NaN
         if (loss != loss).data.any():
@@ -217,7 +236,7 @@ class Trainer(object):
         self.map_optimizer.step()
         #self.orthogonalize()
 
-        return loss
+        return avg_cos_sim, loss
 
     def load_training_dico(self, dico_train):
         """
