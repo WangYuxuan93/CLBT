@@ -55,11 +55,6 @@ class Trainer(object):
         self.decrease_lr = False
         self.decrease_dis_lr = False
 
-        # offset for aligned embeddings (supervised learning)
-        self.offset = 0
-        self.ids = None
-
-
     def get_dis_xy(self, volatile):
         """
         Get discriminator input batch / output target.
@@ -158,12 +153,12 @@ class Trainer(object):
         bs = self.params.batch_size
         assert bs <= min(len(self.src_dico), len(self.tgt_dico))
         for offset in range(0, len(ids), bs):
-            if self.offset+bs <= len(ids):
-                src_ids = ids[self.offset:self.offset+bs]
-                tgt_ids = ids[self.offset:self.offset+bs]
+            if offset+bs <= len(ids):
+                src_ids = ids[offset:offset+bs]
+                tgt_ids = ids[offset:offset+bs]
             else:
-                src_ids = ids[self.offset:]
-                tgt_ids = ids[self.offset:]
+                src_ids = ids[offset:]
+                tgt_ids = ids[offset:]
             batches.append((src_ids, tgt_ids))
         return batches
 

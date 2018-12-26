@@ -35,6 +35,7 @@ parser.add_argument("--n_epochs", type=int, default=1000, help="Number of epochs
 parser.add_argument("--batch_size", type=int, default=1024, help="Batch size")
 parser.add_argument("--map_optimizer", type=str, default="sgd,lr=0.1,weight_decay=0.01", help="self.mapping optimizer")
 parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate decay (SGD only)") 
+parser.add_argument("--decay_step", type=int, default=100, help="Learning rate decay step (SGD only)")
 parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
 parser.add_argument("--quit_after_n_epochs_without_improvement", type=int, default=500, help="Quit after n epochs without improvement")
 parser.add_argument("--loss", type=str, default="cos_sim", help="loss type (cos_sim, max_margin_top-k, max_margin_all)")
@@ -97,11 +98,13 @@ path4loss = params.model_path + '/model4loss'
 for n_epoch in range(params.n_epochs):
 
     logger.info('Starting epoch %i...' % n_epoch)
-    
+    if (n_epoch+1) % params.decay_step == 0:
+        trainer.decay_map_lr()
     batches = trainer.get_aligned_id_batchs()
     n_inst = 0
     to_log = {"avg_cosine_similarity": 0, "loss": 0}
     for i, (src_ids, tgt_ids) in enumerate(batches):
+        #print (src_ids, tgt_ids)
         avg_cos_sim, loss = trainer.supervised_mapping_step(src_ids, tgt_ids)
         n_inst += len(src_ids)
         cos_sim = avg_cos_sim.cpu().detach().numpy()
