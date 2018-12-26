@@ -92,26 +92,37 @@ logger.info("Validation metric: %s" % VALIDATION_METRIC)
 Learning loop for Procrustes Iterative Learning
 """
 n_without_improvement = 0
+min_loss = 1e6
+path4loss = params.model_path + '/model4loss'
 for n_epoch in range(params.n_epochs):
 
     logger.info('Starting epoch %i...' % n_epoch)
     
     batches = trainer.get_aligned_id_batchs()
     n_inst = 0
-    to_log = {"avg_cosine_similarity": 0}
+    to_log = {"avg_cosine_similarity": 0, "loss": 0}
     for i, (src_ids, tgt_ids) in enumerate(batches):
         avg_cos_sim, loss = trainer.supervised_mapping_step(src_ids, tgt_ids)
         n_inst += len(src_ids)
         cos_sim = avg_cos_sim.cpu().detach().numpy()
+        loss_ = loss.cpu().detach().numpy()
         logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}, Loss:{:.6f}".format(i, 
-                    n_inst, cos_sim, loss.cpu().detach().numpy()))
+                    n_inst, cos_sim, loss_))
         to_log["avg_cosine_similarity"] += cos_sim
+        to_log["loss"] += loss_
     to_log["avg_cosine_similarity"] /= len(batches)
-    if to_log["avg_cosine_similarity"] <= trainer.best_valid_metric:
+    to_log["loss"] /= len(batches)
+    if to_log["avg_cosine_similarity"] <= trainer.best_valid_metric and to_log["loss"] >= min_loss:
         n_without_improvement += 1
     else:
         n_without_improvement = 0
+    if to_log["loss"] < min_loss:
+        logger.info(" Minimum loss : {:.6f}".format(to_log["loss"]))
+        trainer.save_model(path4loss)
+        min_loss = to_log["loss"]
     trainer.save_best(to_log, "avg_cosine_similarity")
+    logger.info("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
+    logger.info("Maximum Average Cosine Similarity:{:.6f}, Minimum Average Loss:{:.6f}".format(trainer.best_valid_metric, min_loss))
     logger.info('End of epoch %i.\n\n' % n_epoch)
     if n_without_improvement >= params.quit_after_n_epochs_without_improvement:
         logger.info('After {} epochs without improvement, quiting!'.format(n_without_improvement))

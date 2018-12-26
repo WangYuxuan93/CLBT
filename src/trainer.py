@@ -206,18 +206,18 @@ class Trainer(object):
         gold_scores = scores[rang, rang]
         avg_cos_sim = gold_scores.mean()
 
-        if self.args.loss == 'cos_sim':
+        if self.params.loss == 'cos_sim':
             # maximize cosine similarities
             loss = - gold_scores.mean()
-        elif self.args.loss.startswith('max_margin_top'):
+        elif self.params.loss.startswith('max_margin_top'):
             # max margin with top k elements
-            k = int(self.args.loss.split('-')[1])
+            k = int(self.params.loss.split('-')[1])
             # (n, k)
-            top_vals, top_ids = scores.topk(k, 1, True)[1]
+            top_vals, top_ids = scores.topk(k, 1, True)
             # (n) => (n, k)
             gold_vals = gold_scores.unsqueeze(1).expand_as(top_vals)
             # (n, k)
-            margins = ones_like(top_vals) * margin
+            margins = torch.ones_like(top_vals) * margin
             # (n, k)
             losses = margins - gold_vals + top_vals
             # mask out less than 0
@@ -392,6 +392,22 @@ class Trainer(object):
         else:
             W = self.mapping.weight.data.cpu().numpy()
         path = os.path.join(self.params.model_path, 'iter-'+str(iter) , 'best_mapping.pkl')
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        logger.info('* Saving the mapping to %s ...' % path)
+        torch.save(W, path)
+
+    def save_model(self, path):
+        """
+        Save the current model.
+        """
+        # best mapping for the given validation criterion
+        # save the mapping
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data.cpu().numpy()
+        else:
+            W = self.mapping.weight.data.cpu().numpy()
+        path = os.path.join(path, 'best_mapping.pkl')
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
         logger.info('* Saving the mapping to %s ...' % path)
