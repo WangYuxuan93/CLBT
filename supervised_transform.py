@@ -38,7 +38,8 @@ parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate 
 parser.add_argument("--decay_step", type=int, default=100, help="Learning rate decay step (SGD only)")
 parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
 parser.add_argument("--quit_after_n_epochs_without_improvement", type=int, default=500, help="Quit after n epochs without improvement")
-parser.add_argument("--loss", type=str, default="cos_sim", help="loss type (cos_sim, max_margin_top-k, max_margin_all)")
+parser.add_argument("--normalize_embed", type=bool_flag, default=False, help="Normalize embeddings? (should be false with l2_dist loss)")
+parser.add_argument("--loss", type=str, default="cos_sim", help="loss type (cos_sim, max_margin_top-k, l2_dist)")
 # data
 parser.add_argument("--src_lang", type=str, default='en', help="Source language")
 parser.add_argument("--tgt_lang", type=str, default='es', help="Target language")

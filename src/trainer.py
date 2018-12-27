@@ -191,20 +191,29 @@ class Trainer(object):
         src_emb, tgt_emb = self.get_aligned_embs(src_ids, tgt_ids)
 
         # normalization
-        src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
-        tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
-
-        scores = src_emb.mm(tgt_emb.transpose(0, 1))
-
-        rang = torch.arange(scores.shape[0], out=torch.LongTensor())
-        # (n)
-        gold_scores = scores[rang, rang]
-        avg_cos_sim = gold_scores.mean()
-
+        if self.params.normalize_embed:
+            src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
+            tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
+        # (n, n)
+        #scores = src_emb.mm(tgt_emb.transpose(0, 1))
+        #rang = torch.arange(scores.shape[0], out=torch.LongTensor())
+        #gold_scores = scores[rang, rang]
+        
         if self.params.loss == 'cos_sim':
+            # (n)
+            gold_scores = (src_emb * tgt_emb).sum(1)
             # maximize cosine similarities
             loss = - gold_scores.mean()
+        elif self.params.loss == 'l2_dist':
+            # (n, d)
+            sub = src_emb - tgt_emb
+            # (n, d) => (n) => ()
+            loss = (sub * sub).sum(1).mean()
         elif self.params.loss.startswith('max_margin_top'):
+            # (n)
+            gold_scores = (src_emb * tgt_emb).sum(1)
+            # (n, n)
+            scores = src_emb.mm(tgt_emb.transpose(0, 1))
             # max margin with top k elements
             k = int(self.params.loss.split('-')[1])
             # (n, k)
@@ -224,6 +233,13 @@ class Trainer(object):
         if (loss != loss).data.any():
             logger.error("NaN detected (fool discriminator)")
             exit()
+
+        # calculating average cosine similarity
+        if not self.params.normalize_embed:
+            src_emb = src_emb / src_emb.norm(2, 1, keepdim=True).expand_as(src_emb)
+            tgt_emb = tgt_emb / tgt_emb.norm(2, 1, keepdim=True).expand_as(tgt_emb)
+        # (n)
+        avg_cos_sim = (src_emb * tgt_emb).sum(1).mean()
 
         # optim
         self.map_optimizer.zero_grad()
