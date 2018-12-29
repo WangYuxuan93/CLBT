@@ -50,6 +50,11 @@ def initialize_exp(args):
     """
     Initialize experiment.
     """
+    if args.test:
+        logger = create_logger(os.path.join(args.model_path, 'test.log'), vb=args.verbose)
+        logger.info('============ Initialized logger for test ============')
+        logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
+        return logger
     # initialization
     if getattr(args, 'seed', -1) >= 0:
         np.random.seed(args.seed)
@@ -74,7 +79,6 @@ def initialize_exp(args):
     logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
     logger.info('The experiment will be stored in %s' % args.model_path)
     return logger
-
 
 def load_fasttext_model(path):
     """

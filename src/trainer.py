@@ -241,6 +241,8 @@ class Trainer(object):
         # (n)
         avg_cos_sim = (src_emb * tgt_emb).sum(1).mean()
 
+        if self.params.test:
+            return avg_cos_sim, loss
         # optim
         self.map_optimizer.zero_grad()
         loss.backward()
@@ -439,6 +441,8 @@ class Trainer(object):
             W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
+        if self.params.test:
+            print (W)
 
     def export(self):
         """
