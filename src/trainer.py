@@ -248,7 +248,7 @@ class Trainer(object):
         loss.backward()
         self.map_optimizer.step()
         if self.params.ortho:
-            logger.info("Applying Orthogonalize")
+            #logger.info("Applying Orthogonalize")
             self.orthogonalize()
 
         return avg_cos_sim, loss
