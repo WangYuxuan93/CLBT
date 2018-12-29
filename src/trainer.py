@@ -387,46 +387,49 @@ class Trainer(object):
             # new best mapping
             self.best_valid_metric = to_log[metric]
             logger.info('* Best value for "%s": %.5f' % (metric, to_log[metric]))
-            # save the mapping
-            if isinstance(self.mapping, torch.nn.DataParallel):
-                W = self.mapping.module.weight.data.cpu().numpy()
-            else:
-                W = self.mapping.weight.data.cpu().numpy()
+
+            #if isinstance(self.mapping, torch.nn.DataParallel):
+            #    W = self.mapping.module.weight.data.cpu().numpy()
+            #else:
+            #    W = self.mapping.weight.data.cpu().numpy()
             path = os.path.join(self.params.model_path, 'best_mapping.pkl')
-            logger.info('* Saving the mapping to %s ...' % path)
-            torch.save(W, path)
+            #logger.info('* Saving the mapping to %s ...' % path)
+            self.save_model(path)
+            #torch.save(W, path)
 
     def save_iter(self, iter):
         """
         Save the current model.
         """
         # best mapping for the given validation criterion
-        # save the mapping
-        if isinstance(self.mapping, torch.nn.DataParallel):
-            W = self.mapping.module.weight.data.cpu().numpy()
-        else:
-            W = self.mapping.weight.data.cpu().numpy()
+        #if isinstance(self.mapping, torch.nn.DataParallel):
+        #    W = self.mapping.module.weight.data.cpu().numpy()
+        #else:
+        #    W = self.mapping.weight.data.cpu().numpy()
         path = os.path.join(self.params.model_path, 'iter-'+str(iter) , 'best_mapping.pkl')
-        if not os.path.exists(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path))
-        logger.info('* Saving the mapping to %s ...' % path)
-        torch.save(W, path)
+        #if not os.path.exists(os.path.dirname(path)):
+        #    os.makedirs(os.path.dirname(path))
+        #logger.info('* Saving the mapping to %s ...' % path)
+        #path = os.path.join(self.params.model_path, 'iter-'+str(iter))
+        self.save_model(path)
+        #torch.save(W, path)
 
     def save_model(self, path):
         """
-        Save the current model.
+        Save model to path.
         """
-        # best mapping for the given validation criterion
-        # save the mapping
-        if isinstance(self.mapping, torch.nn.DataParallel):
-            W = self.mapping.module.weight.data.cpu().numpy()
-        else:
-            W = self.mapping.weight.data.cpu().numpy()
-        path = os.path.join(path, 'best_mapping.pkl')
+        #path = os.path.join(path, 'best_mapping.pkl')
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
+
         logger.info('* Saving the mapping to %s ...' % path)
-        torch.save(W, path)
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            torch.save(self.mapping.module.state_dict(), path)
+            #W = self.mapping.module.weight.data.cpu().numpy()
+        else:
+            torch.save(self.mapping.state_dict(), path)
+            #W = self.mapping.weight.data.cpu().numpy()
+        #torch.save(W, path)
 
     def reload_best(self):
         """
@@ -445,6 +448,17 @@ class Trainer(object):
         W.copy_(to_reload.type_as(W))
         if self.params.test:
             print (W)
+
+    def load_model(self, path):
+        """
+        load model from path
+        """
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            self.mapping.module.load_state_dict(
+                torch.load(path, map_location=lambda storage, loc: storage))
+        else:
+            self.mapping.load_state_dict(
+                torch.load(path, map_location=lambda storage, loc: storage))
 
     def export(self):
         """

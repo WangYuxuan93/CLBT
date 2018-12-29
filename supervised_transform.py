@@ -12,7 +12,7 @@ from collections import OrderedDict
 import torch
 
 from src.utils import bool_flag, initialize_exp
-from src.models import build_model
+from src.models import build_supervised_model
 from src.trainer import Trainer
 from src.evaluation import Evaluator
 
@@ -64,6 +64,10 @@ def main():
     parser.add_argument("--save_all", action='store_true', default=False, help="Save every model")
     parser.add_argument("--map_beta", type=float, default=0.01, help="Beta for orthogonalization")
     parser.add_argument("--ortho", action='store_true', default=False, help="Apply orthogonalize after each update")
+    parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
+    parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
+    parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
+    parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
     # parse parameters
     params = parser.parse_args()
 
@@ -93,7 +97,7 @@ class SupervisedMap(object):
 
         # build self.logger / model / self.trainer / evaluator
         self.logger = initialize_exp(params)
-        src_emb, tgt_emb, mapping, _ = build_model(params, False)
+        src_emb, tgt_emb, mapping, _ = build_supervised_model(params, False)
         self.trainer = Trainer(src_emb, tgt_emb, mapping, None, params)
         evaluator = Evaluator(self.trainer)
 
@@ -102,8 +106,8 @@ class SupervisedMap(object):
         self.trainer.load_training_dico(params.dico_train)
 
         # define the validation metric
-        VALIDATION_METRIC = VALIDATION_METRIC_UNSUP if params.dico_train == 'identical_char' else VALIDATION_METRIC_SUP
-        self.logger.info("Validation metric: %s" % VALIDATION_METRIC)
+        #VALIDATION_METRIC = VALIDATION_METRIC_UNSUP if params.dico_train == 'identical_char' else VALIDATION_METRIC_SUP
+        #self.logger.info("Validation metric: %s" % VALIDATION_METRIC)
 
     def train(self):
         """
@@ -148,7 +152,7 @@ class SupervisedMap(object):
                                     to_log["avg_cosine_similarity"], to_log["loss"]))
                 else:
                     save_path = path4loss
-                self.trainer.save_model(save_path)
+                self.trainer.save_model(save_path+'/best_mapping.pkl')
                 min_loss = to_log["loss"]
             self.trainer.save_best(to_log, "avg_cosine_similarity")
             self.logger.info("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
