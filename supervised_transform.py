@@ -110,8 +110,8 @@ class SupervisedMap(object):
         n_without_improvement = 0
         min_loss = 1e6
         path4loss = self.params.model_path + '/model4loss'
-        if not os.path.exists(os.path.dirname(path4loss)):
-            os.makedirs(os.path.dirname(path4loss))
+        if not os.path.exists(path4loss):
+            os.makedirs(path4loss)
         if self.params.save_all:
             model_log = open(path4loss+'/model.log', 'w')
         for n_epoch in range(self.params.n_epochs):

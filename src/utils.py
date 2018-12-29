@@ -50,7 +50,7 @@ def initialize_exp(args):
     """
     Initialize experiment.
     """
-    if args.test:
+    if hasattr(args, 'test') and args.test:
         logger = create_logger(os.path.join(args.model_path, 'test.log'), vb=args.verbose)
         logger.info('============ Initialized logger for test ============')
         logger.info('\n'.join('%s: %s' % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
