@@ -61,6 +61,7 @@ def main():
     parser.add_argument("--tgt_emb", type=str, default='', help="Reload target embeddings")
     parser.add_argument("--normalize_embeddings", type=str, default="", help="Normalize embeddings before training")
     parser.add_argument("--test", action='store_true', default=False, help="Predict cosine similarity & L2 distance with input model")
+    parser.add_argument("--save_all", action='store_true', default=False, help="save every model")
     # parse parameters
     params = parser.parse_args()
 
@@ -109,6 +110,10 @@ class SupervisedMap(object):
         n_without_improvement = 0
         min_loss = 1e6
         path4loss = self.params.model_path + '/model4loss'
+        if not os.path.exists(os.path.dirname(path4loss)):
+            os.makedirs(os.path.dirname(path4loss))
+        if self.params.save_all:
+            model_log = open(path4loss+'/model.log', 'w')
         for n_epoch in range(self.params.n_epochs):
 
             self.logger.info('Starting epoch %i...' % n_epoch)
@@ -135,7 +140,13 @@ class SupervisedMap(object):
                 n_without_improvement = 0
             if to_log["loss"] < min_loss:
                 self.logger.info(" Minimum loss : {:.6f}".format(to_log["loss"]))
-                self.trainer.save_model(path4loss)
+                if self.params.save_all:
+                    save_path = path4loss+'/epoch-'+str(n_epoch)
+                    model_log.write("Epoch:{}, Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}\n".format(n_epoch, 
+                                    to_log["avg_cosine_similarity"], to_log["loss"]))
+                else:
+                    save_path = path4loss
+                self.trainer.save_model(save_path)
                 min_loss = to_log["loss"]
             self.trainer.save_best(to_log, "avg_cosine_similarity")
             self.logger.info("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
