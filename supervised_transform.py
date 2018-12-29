@@ -175,14 +175,14 @@ class SupervisedMap(object):
             n_inst += len(src_ids)
             cos_sim = avg_cos_sim.cpu().detach().numpy()
             loss_ = loss.cpu().detach().numpy()
-            print ("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}, Loss:{:.6f}".format(i, 
+            self.logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}, Loss:{:.6f}".format(i, 
                         n_inst, cos_sim, loss_))
             to_log["avg_cosine_similarity"] += cos_sim
             to_log["loss"] += loss_
         to_log["avg_cosine_similarity"] /= len(batches)
         to_log["loss"] /= len(batches)
 
-        print ("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
+        self.logger.info("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
 
 if __name__ == '__main__':
     main()
