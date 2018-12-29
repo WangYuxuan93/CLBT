@@ -61,7 +61,9 @@ def main():
     parser.add_argument("--tgt_emb", type=str, default='', help="Reload target embeddings")
     parser.add_argument("--normalize_embeddings", type=str, default="", help="Normalize embeddings before training")
     parser.add_argument("--test", action='store_true', default=False, help="Predict cosine similarity & L2 distance with input model")
-    parser.add_argument("--save_all", action='store_true', default=False, help="save every model")
+    parser.add_argument("--save_all", action='store_true', default=False, help="Save every model")
+    parser.add_argument("--map_beta", type=float, default=0.01, help="Beta for orthogonalization")
+    parser.add_argument("--ortho", action='store_true', default=False, help="Apply orthogonalize after each update")
     # parse parameters
     params = parser.parse_args()
 
