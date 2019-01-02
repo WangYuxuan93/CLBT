@@ -447,6 +447,16 @@ class Trainer(object):
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
 
+    def load_best(self):
+        """
+        Reload the best mapping.
+        """
+        path = os.path.join(self.params.model_path, 'best_mapping.pkl')
+        logger.info('* Loading the best model from %s ...' % path)
+        # reload the model
+        assert os.path.isfile(path)
+        self.load_model(path)
+
     def load_model(self, path):
         """
         load model from path
