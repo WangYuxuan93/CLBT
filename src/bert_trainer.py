@@ -337,7 +337,7 @@ class BertTrainer(object):
         """
         Reload the best mapping.
         """
-        path = os.path.join(self.params.model_path, 'best_mapping.pkl')
+        path = os.path.join(self.args.model_path, 'best_mapping.pkl')
         logger.info('* Loading the best model from %s ...' % path)
         # reload the model
         assert os.path.isfile(path)
