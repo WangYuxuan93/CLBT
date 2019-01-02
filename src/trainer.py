@@ -443,8 +443,6 @@ class Trainer(object):
             W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
-        if self.params.test:
-            print (W)
 
     def export(self):
         """
