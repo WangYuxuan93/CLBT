@@ -168,7 +168,8 @@ class SupervisedMap(object):
             self.trainer.export()
 
     def test(self):
-        self.trainer.reload_best()
+        #self.trainer.reload_best()
+        self.trainer.load_best()
         batches = self.trainer.get_aligned_id_batchs(shuffle=False)
         n_inst = 0
         to_log = {"avg_cosine_similarity": 0, "loss": 0}

@@ -455,18 +455,26 @@ class Trainer(object):
         logger.info('* Loading the best model from %s ...' % path)
         # reload the model
         assert os.path.isfile(path)
-        self.load_model(path)
+        if self.load_model(path):
+            return True
+        else:
+            print ("Failed in loading by state_dict, reloading by copying ...")
+            self.reload_best()
 
     def load_model(self, path):
         """
         load model from path
         """
-        if isinstance(self.mapping, torch.nn.DataParallel):
-            self.mapping.module.load_state_dict(
-                torch.load(path, map_location=lambda storage, loc: storage))
-        else:
-            self.mapping.load_state_dict(
-                torch.load(path, map_location=lambda storage, loc: storage))
+        try:
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                self.mapping.module.load_state_dict(
+                    torch.load(path, map_location=lambda storage, loc: storage))
+            else:
+                self.mapping.load_state_dict(
+                    torch.load(path, map_location=lambda storage, loc: storage))
+        except:
+            return False
+        return True
 
     def export(self):
         """
