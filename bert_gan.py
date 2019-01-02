@@ -102,6 +102,11 @@ def main():
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
     parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
+    # For non-linear mapping
+    parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
+    parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
+    parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
+    parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
     # parse parameters
     args = parser.parse_args()
 
@@ -352,6 +357,7 @@ class AdvBert(object):
         pred_sampler = SequentialSampler(pred_dataset)
         pred_dataloader = DataLoader(pred_dataset, sampler=pred_sampler, batch_size=self.args.batch_size)
         self.bert_model.eval()
+        self.trainer.mapping.eval()
         with open(self.args.output_file, "w", encoding='utf-8') as writer:
             for input_ids, input_mask, example_indices in pred_dataloader:
                 input_ids = input_ids.to(self.device)

@@ -10,6 +10,7 @@ from torch import nn
 
 from src.utils import load_embeddings, normalize_embeddings
 from src.bert_modeling import BertConfig, BertModel
+from src.models import NonLinearMap
 
 class Discriminator(nn.Module):
 
@@ -70,7 +71,10 @@ def build_model(args, with_dis):
 
     # mapping
     #mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
-    if not args.bert_config_file1:
+    # mapping
+    if params.non_linear:
+        mapping = NonLinearMap(args)
+    elif not args.bert_config_file1:
         mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
     else:
         mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
