@@ -268,35 +268,54 @@ class BertTrainer(object):
             self.best_valid_metric = sent_sim
             logger.info('### New record (sentence similarity): {:.2f}% ###'.format(sent_sim*100))
             # save the mapping
-            if isinstance(self.mapping, torch.nn.DataParallel):
-                W = self.mapping.module.weight.data.cpu().numpy()
-            else:
-                W = self.mapping.weight.data.cpu().numpy()
+            #if isinstance(self.mapping, torch.nn.DataParallel):
+            #    W = self.mapping.module.weight.data.cpu().numpy()
+            #else:
+            #    W = self.mapping.weight.data.cpu().numpy()
             path = path if path else self.args.model_path
-            if not os.path.exists(path):
-                os.makedirs(path)
+            #if not os.path.exists(path):
+            #    os.makedirs(path)
             map_path = os.path.join(path, 'best_mapping.pkl')
             logger.info('### Saving the mapping to {} ... ###'.format(map_path))
-            torch.save(W, map_path)
+            #torch.save(W, map_path)
+            self.save_model(map_path)
             if self.args.save_dis:
                 torch.save(self.discriminator.state_dict(), os.path.join(path, 'discriminator.pkl'))
 
-    def save_model(self, path, epoch):
+    def save_epoch(self, path, epoch):
         """
         Save the model for the given validation metric.
         """
         # save the mapping
-        if isinstance(self.mapping, torch.nn.DataParallel):
-            W = self.mapping.module.weight.data.cpu().numpy()
-        else:
-            W = self.mapping.weight.data.cpu().numpy()
-        if not os.path.exists(path):
-            os.makedirs(path)
+        #if isinstance(self.mapping, torch.nn.DataParallel):
+        #    W = self.mapping.module.weight.data.cpu().numpy()
+        #else:
+        #    W = self.mapping.weight.data.cpu().numpy()
+        #if not os.path.exists(path):
+        #    os.makedirs(path)
         map_path = os.path.join(path, 'best_mapping.pkl')
         logger.info('### (End of epoch {}) Saving the mapping to {} ... ###'.format(epoch,map_path))
-        torch.save(W, map_path)
+        #torch.save(W, map_path)
+        self.save_model(map_path)
         if self.args.save_dis:
             torch.save(self.discriminator.state_dict(), os.path.join(path, 'discriminator.pkl'))
+
+    def save_model(self, path):
+        """
+        Save model to path.
+        """
+        #path = os.path.join(path, 'best_mapping.pkl')
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+
+        logger.info('* Saving the mapping to %s ...' % path)
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            torch.save(self.mapping.module.state_dict(), path)
+            #W = self.mapping.module.weight.data.cpu().numpy()
+        else:
+            torch.save(self.mapping.state_dict(), path)
+            #W = self.mapping.weight.data.cpu().numpy()
+        #torch.save(W, path)
 
     def reload_best(self):
         """
@@ -313,3 +332,32 @@ class BertTrainer(object):
             W = self.mapping.weight.data
         assert to_reload.size() == W.size()
         W.copy_(to_reload.type_as(W))
+
+    def load_best(self):
+        """
+        Reload the best mapping.
+        """
+        path = os.path.join(self.params.model_path, 'best_mapping.pkl')
+        logger.info('* Loading the best model from %s ...' % path)
+        # reload the model
+        assert os.path.isfile(path)
+        if self.load_model(path):
+            return True
+        else:
+            print ("Failed while loading by state_dict, reloading by copying ...")
+            self.reload_best()
+
+    def load_model(self, path):
+        """
+        load model from path
+        """
+        try:
+            if isinstance(self.mapping, torch.nn.DataParallel):
+                self.mapping.module.load_state_dict(
+                    torch.load(path, map_location=lambda storage, loc: storage))
+            else:
+                self.mapping.load_state_dict(
+                    torch.load(path, map_location=lambda storage, loc: storage))
+        except:
+            return False
+        return True

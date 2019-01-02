@@ -248,7 +248,7 @@ class AdvBert(object):
             # JSON log / save best model / end of epoch
             #self.logger.info("__log__:%s" % json.dumps(to_log))
             if not os.path.exists(path):
-                self.trainer.save_model(path, n_epoch)
+                self.trainer.save_epoch(path, n_epoch)
             self.logger.info('End of epoch %i.\n\n' % n_epoch)
 
             # update the learning rate (stop if too small)
@@ -265,7 +265,7 @@ class AdvBert(object):
 
         # Get the best self.mapping according to VALIDATION_METRIC
         self.logger.info('----> ITERATIVE PROCRUSTES REFINEMENT <----\n\n')
-        self.trainer.reload_best()
+        self.trainer.load_best()
 
         # training loop
         for n_iter in range(self.args.n_refinement):
@@ -289,7 +289,7 @@ class AdvBert(object):
         assert self.args.src_file is not None
         assert self.args.output_file is not None
 
-        self.trainer.reload_best()
+        self.trainer.load_best()
         pred_dataset, unique_id_to_feature, features = load_single(self.args.vocab_file, 
                         self.args.src_file, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
@@ -343,7 +343,7 @@ class AdvBert(object):
         """
         assert self.args.output_file is not None
 
-        self.trainer.reload_best()
+        self.trainer.load_best()
         pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
                         sents, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
@@ -417,72 +417,6 @@ class AdvBert(object):
         sampler = SequentialSampler(self.dataset)
         loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
         self.evaluator.calculate_sim(loader)
-        
-        """
-        n_sent = 0
-
-        self.punc = ""
-        self.stop_words_a = ""
-        self.stop_words_b = ""
-        if self.args.rm_punc:
-            self.punc = string.punctuation
-        if self.args.rm_stop_words:
-            self.stop_words_a = load_stop_words(self.args.stop_words_src)
-            self.stop_words_b = load_stop_words(self.args.stop_words_tgt)
-        if self.args.sim_with_map:
-            reload_model(self.mapping, self.args.model_path)
-        outfile = self.args.sim_file if self.args.sim_file else 'similarities.txt'
-        similarities = []
-        with open(outfile ,'w') as fo:
-            for input_ids_a, input_mask_a, input_ids_b, input_mask_b, example_indices in train_loader:
-                input_ids_a = input_ids_a.to(self.device)
-                input_mask_a = input_mask_a.to(self.device)
-                input_ids_b = input_ids_b.to(self.device)
-                input_mask_b = input_mask_b.to(self.device)
-
-                if self.args.base_embed:
-                    src_bert = self.bert_model.module.embeddings(input_ids_a, None)
-                    tgt_bert = self.bert_model1.module.embeddings(input_ids_b, None).data.cpu().numpy()
-                else:
-                    src_bert = self.get_bert(input_ids_a, input_mask_a, 
-                                        bert_layer=self.args.bert_layer, model_id=0)
-                    tgt_bert = self.get_bert(input_ids_b, input_mask_b, 
-                                        bert_layer=self.args.bert_layer, model_id=1).data.cpu().numpy()
-                if self.args.sim_with_map:
-                    src_bert = self.mapping(src_bert)
-                src_bert = src_bert.data.cpu().numpy()
- 
-                for i, example_index in enumerate(example_indices):
-                    n_sent += 1
-                    if n_sent % 1000 == 0:
-                        print ("\r{}".format(n_sent),end="")
-                    feature = self.features[example_index.item()]
-                    seq_len_a = np.sum(input_mask_a[i].data.cpu().numpy())
-                    seq_len_b = np.sum(input_mask_b[i].data.cpu().numpy())
-                    # [seq_len, output_dim]
-                    src_emb = src_bert[i][1:seq_len_a-1]
-                    tgt_emb = tgt_bert[i][1:seq_len_b-1]
-                    if rm_stop_words or self.args.rm_punc:
-                        src_toks, src_emb = rm_stop_words(feature.tokens_a[1:-1], src_emb, self.stop_words_a, self.punc)
-                        tgt_toks, tgt_emb = rm_stop_words(feature.tokens_b[1:-1], tgt_emb, self.stop_words_b, self.punc)
-                    # calculate overlap token sim
-                    if self.args.overlap_sim:
-                        overlaps = get_overlaps(src_toks, src_emb, tgt_toks, tgt_emb)
-                        if not overlaps:
-                            continue
-                        sims, infos = get_overlap_sim(overlaps)
-                        similarities.extend([s['sim'] for s in sims])
-                        fo.write(' | '.join(infos)+'\n'+' '.join(src_toks)+' ||| '+' '.join(tgt_toks)+'\n')
-                    # calculate sent sim
-                    else:
-                        if len(src_emb) == 0 or len(tgt_emb) == 0:
-                            continue
-                        similarities.append(cos_sim(np.mean(src_emb, 0), np.mean(tgt_emb, 0)))
-                        fo.write('sim:'+str(similarities[-1])+'\n'+' '.join(feature.tokens_a)+' ||| '+' '.join(feature.tokens_b)+'\n')
-            sim_mean = np.mean(similarities)
-            fo.write("Mean similarity: {:.2f}% , Number: {}".format(sim_mean*100, len(similarities)))
-        print("Mean similarity: {:.2f}% , Number: {} ".format(sim_mean*100, len(similarities)))
-        """
 
 if __name__ == "__main__":
   main()

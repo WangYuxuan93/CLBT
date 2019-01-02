@@ -458,7 +458,7 @@ class Trainer(object):
         if self.load_model(path):
             return True
         else:
-            print ("Failed in loading by state_dict, reloading by copying ...")
+            print ("Failed while loading by state_dict, reloading by copying ...")
             self.reload_best()
 
     def load_model(self, path):
