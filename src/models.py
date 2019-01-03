@@ -114,7 +114,8 @@ class NonLinearMap(nn.Module):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
-        assert x.dim() == 2 and x.size(1) == self.emb_dim
+        #assert x.dim() == 2 and x.size(1) == self.emb_dim
+        assert x.size(-1) == self.emb_dim
         return self.layers(x)
 
 def build_supervised_model(params, with_dis):

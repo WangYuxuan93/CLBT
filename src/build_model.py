@@ -72,14 +72,16 @@ def build_model(args, with_dis):
     # mapping
     #mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
     # mapping
-    if params.non_linear:
+    if args.non_linear:
+        args.emb_dim = bert_config.hidden_size
         mapping = NonLinearMap(args)
     elif not args.bert_config_file1:
         mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
     else:
         mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
-    if getattr(args, 'map_id_init', True):
-        mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
+    if not args.non_linear:
+        if getattr(args, 'map_id_init', True):
+            mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     mapping.to(device)
 
     # discriminator

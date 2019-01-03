@@ -356,6 +356,8 @@ class BertTrainer(object):
                 self.mapping.module.load_state_dict(
                     torch.load(path, map_location=lambda storage, loc: storage))
             else:
+                #print (self.mapping.state_dict().keys())
+                #print (torch.load(path).keys())
                 self.mapping.load_state_dict(
                     torch.load(path, map_location=lambda storage, loc: storage))
         except:

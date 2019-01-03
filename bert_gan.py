@@ -129,7 +129,8 @@ class Args(object):
     def __init__(self, model_path, vocab_file, bert_config_file, init_checkpoint, 
                 output_file, max_seq_length=128, bert_layer=-1, map_input=False,
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
-                non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768):
+                non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
+                emb_dim=768):
 
         self.adversarial = False
         self.pred = True
@@ -156,7 +157,7 @@ class Args(object):
         self.activation = activation
         self.n_layers = n_layers
         self.hidden_size = hidden_size
-        
+        self.emb_dim = emb_dim
 
 class AdvBert(object):
 
