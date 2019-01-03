@@ -37,7 +37,9 @@ def bert(raw_file, bert_file, gpu, layer, model, max_seq='256',batch_size='8'):
   print (cmd)
   os.system(cmd)
 
-def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8, map_input=False):
+def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8, 
+                  map_input=False, non_linear=False, activation="leaky_relu", n_layers=2, 
+                  hidden_size=768):
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
@@ -45,7 +47,9 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   output_file = bert_file
   bert_layer = layer
   max_seq_length = max_seq
-  flags = Args(model_path, vocab_file, bert_config_file, init_checkpoint, output_file, max_seq_length, bert_layer)
+  flags = Args(model_path, vocab_file, bert_config_file, init_checkpoint, output_file, 
+                max_seq_length, bert_layer, non_linear=non_linear, activation=activation, 
+                n_layers=n_layers, hidden_size=hidden_size)
   flags.batch_size = batch_size
   flags.map_input = map_input
 
@@ -120,6 +124,10 @@ parser.add_argument("merge_file", type=str, default=None, help="merged bert file
 parser.add_argument("--mapping", type=str, default=None, help="mapping model")
 parser.add_argument("--layer", type=int, default=-1, help="output bert layer")
 parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
+parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
+parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
+parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
+parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
 args = parser.parse_args()
 
 map_model = args.mapping
@@ -134,5 +142,7 @@ sents = []
 for sent in load_conllu(conll_file):
   sents.append(sent)
 print ("Total {} Sentences".format(len(sents)))
-list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input)
+list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input,
+            non_linear=args.non_linear, activation=args.activation, n_layers=args.n_layers,
+            hidden_size=args.hidden_size)
 merge(bert_file, merge_file, sents)
