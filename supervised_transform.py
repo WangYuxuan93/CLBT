@@ -122,7 +122,7 @@ class SupervisedMap(object):
             model_log = open(path4loss+'/model.log', 'w')
         for n_epoch in range(self.params.n_epochs):
 
-            self.logger.info('Starting epoch %i...' % n_epoch)
+            #self.logger.info('Starting epoch %i...' % n_epoch)
             if (n_epoch+1) % self.params.decay_step == 0:
                 self.trainer.decay_map_lr()
             batches = self.trainer.get_aligned_id_batchs()
@@ -134,12 +134,14 @@ class SupervisedMap(object):
                 n_inst += len(src_ids)
                 cos_sim = avg_cos_sim.cpu().detach().numpy()
                 loss_ = loss.cpu().detach().numpy()
-                self.logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}, Loss:{:.6f}".format(i, 
-                            n_inst, cos_sim, loss_))
+                #self.logger.info("Step:{}, Total Instances:{}, Cosine Similarity:{:.6f}, Loss:{:.6f}".format(i, 
+                #            n_inst, cos_sim, loss_))
                 to_log["avg_cosine_similarity"] += cos_sim
                 to_log["loss"] += loss_
             to_log["avg_cosine_similarity"] /= len(batches)
             to_log["loss"] /= len(batches)
+            self.logger.info("Epoch:{}, avg cos sim:{:.6f}, avg loss:{:.6f}, instances:{}".format(n_epoch, to_log["avg_cosine_similarity"], to_log["loss"], n_inst))
+
             if to_log["avg_cosine_similarity"] <= self.trainer.best_valid_metric and to_log["loss"] >= min_loss:
                 n_without_improvement += 1
             else:
@@ -148,16 +150,15 @@ class SupervisedMap(object):
                 self.logger.info(" Minimum loss : {:.6f}".format(to_log["loss"]))
                 if self.params.save_all:
                     save_path = path4loss+'/epoch-'+str(n_epoch)
-                    model_log.write("Epoch:{}, Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}\n".format(n_epoch, 
+                    model_log.write("Epoch:{}, avg cos sim:{:.6f}, avg loss:{:.6f}\n".format(n_epoch, 
                                     to_log["avg_cosine_similarity"], to_log["loss"]))
                 else:
                     save_path = path4loss
                 self.trainer.save_model(save_path+'/best_mapping.pkl')
                 min_loss = to_log["loss"]
-            self.trainer.save_best(to_log, "avg_cosine_similarity")
-            self.logger.info("Average Cosine Similarity:{:.6f}, Average Loss:{:.6f}".format(to_log["avg_cosine_similarity"], to_log["loss"]))
-            self.logger.info("Maximum Average Cosine Similarity:{:.6f}, Minimum Average Loss:{:.6f}".format(self.trainer.best_valid_metric, min_loss))
-            self.logger.info('End of epoch %i.\n\n' % n_epoch)
+            self.trainer.save_best(to_log, "avg_cosine_similarity") 
+            self.logger.info("Max avg cos sim:{:.6f}, Min avg loss:{:.6f}".format(self.trainer.best_valid_metric, min_loss))
+            #self.logger.info('End of epoch %i.\n\n' % n_epoch)
             if n_without_improvement >= self.params.quit_after_n_epochs_without_improvement:
                 self.logger.info('After {} epochs without improvement, quiting!'.format(n_without_improvement))
                 break
