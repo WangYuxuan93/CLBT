@@ -215,7 +215,7 @@ class SupervisedBert(object):
                 align_ids_b = align_ids_b.to(self.device)
                 align_mask = align_mask.to(self.device)
 
-                src_bert = self.trainer.get_indexed_bert(
+                src_bert = self.trainer.get_indexed_mapped_bert(
                                 input_ids_a, input_mask_a, align_ids_a, align_mask, 
                                 bert_layer=self.args.bert_layer, model_id=0)
                 tgt_bert = self.trainer.get_indexed_bert(

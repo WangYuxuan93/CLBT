@@ -174,15 +174,19 @@ class BERTSelfAttention(nn.Module):
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
     def transpose_for_scores(self, x):
+        # (batch, seq_len, hidden_size) => (batch, seq_len, num_head, head_size)
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
+        # (batch, seq_len, num_head, head_size) => (batch, num_head, seq_len, head_size)
         return x.permute(0, 2, 1, 3)
 
     def forward(self, hidden_states, attention_mask):
+        # input: (batch, seq_len, hidden_size)
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
 
+        # (batch, seq_len, num_head, head_size) => (batch, num_head, seq_len, head_size)
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
@@ -194,15 +198,19 @@ class BERTSelfAttention(nn.Module):
         attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
+        # (batch, num_head, seq_len, seq_len)
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
-
+        # (batch, num_head, seq_len, seq_len) * (batch, num_head, seq_len, head_size) 
+        # => (batch, num_head, seq_len, head_size)
         context_layer = torch.matmul(attention_probs, value_layer)
+        # (batch, num_head, seq_len, head_size) => (batch, seq_len, num_head, head_size)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        # (batch, seq_len, num_head, head_size) => (batch, seq_len, hidden_size)
         context_layer = context_layer.view(*new_context_layer_shape)
         return context_layer
 

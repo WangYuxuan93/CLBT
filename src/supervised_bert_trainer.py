@@ -49,7 +49,8 @@ class SupervisedBertTrainer(object):
         """
         Calculate the loss and backward
         Inputs:
-            src_emb/tgt_emb [unmasked_len, output_dim]
+            src_emb [unmasked_len, output_dim] mapped source embeddings
+            tgt_emb [unmasked_len, output_dim] target embeddings
         Outputs:
             avg_cos_sim/loss
         """
@@ -159,7 +160,17 @@ class SupervisedBertTrainer(object):
         rearanged_layer = layer.gather(1, expanded_index)
         return rearanged_layer
 
-    def get_indexed_bert(self, input_ids, input_mask, index, align_mask, bert_layer=-1, model_id=0):
+    def get_indexed_mapped_bert(self, input_ids, input_mask, index, align_mask, bert_layer=-1, model_id=0):
+        """
+        Get bert according to index and align_mask
+        """
+        unmasked_bert = self.get_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
+        mapped_bert = self.mapping(unmasked_bert, input_mask)
+        rearanged_bert = self.rearange(mapped_bert, index)
+        indexed_bert = self.select(rearanged_bert, align_mask)
+        return indexed_bert
+
+    def get_indexed_bert(self, input_ids, input_mask, index, align_mask, bert_layer=-1, model_id=1):
         """
         Get bert according to index and align_mask
         """
