@@ -10,7 +10,9 @@ from torch import nn
 
 from src.utils import load_embeddings, normalize_embeddings
 from src.bert_modeling import BertConfig, BertModel
-from src.models import NonLinearMap
+from src.maps import NonLinearMap, SelfAttentionMap, AttentionMap
+
+transformer_types = ['self_attention','attention']
 
 class Discriminator(nn.Module):
 
@@ -70,16 +72,22 @@ def build_model(args, with_dis):
         assert bert_config.hidden_size == bert_config1.hidden_size
 
     # mapping
-    #mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
-    # mapping
     if args.non_linear:
         args.emb_dim = bert_config.hidden_size
         mapping = NonLinearMap(args)
+    elif args.transformer:
+        if args.transformer not in transformer_types:
+            raise ValueError("{} not in transformer types {}".format(args.transformer, '|'.join(transformer_types)))
+            exit(1)
+        if args.transformer == 'self_attention':
+            mapping = SelfAttentionMap(args)
+        elif args.transformer == 'attention':
+            mapping = AttentionMap(args)
     elif not args.bert_config_file1:
         mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
     else:
         mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
-    if not args.non_linear:
+    if not args.non_linear and not args.transformer:
         if getattr(args, 'map_id_init', True):
             mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     mapping.to(device)
