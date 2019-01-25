@@ -15,7 +15,7 @@ class AttentionMap(nn.Module):
         self.config.attention_probs_dropout_prob = args.attention_probs_dropout_prob
         self.config.hidden_dropout_prob = args.hidden_dropout_prob
         self.attention = BERTAttention(self.config)
-        print ("Self Attention Mapping:\nHidden Size:{}\nAttention Heads:{}\nAttention Dropout:{}\nHidden Dropout:{}".format(self.config.hidden_size, 
+        print ("Attention Mapping:\nHidden Size:{}\nAttention Heads:{}\nAttention Dropout:{}\nHidden Dropout:{}".format(self.config.hidden_size, 
                 self.config.num_attention_heads, self.config.attention_probs_dropout_prob,
                 self.config.hidden_dropout_prob))
 

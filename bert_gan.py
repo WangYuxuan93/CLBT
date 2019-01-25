@@ -140,6 +140,7 @@ class Args(object):
         self.batch_size = 32
         self.do_lower_case = True
         self.map_input = map_input
+        self.transformer = None
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file
