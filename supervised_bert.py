@@ -124,8 +124,10 @@ class Args(object):
                 output_file, max_seq_length=128, bert_layer=-1, map_input=False,
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
                 non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
-                emb_dim=768, transformer=None):
+                emb_dim=768, transformer=None, num_attention_heads=12, 
+                attention_probs_dropout_prob=0.1, hidden_dropout_prob=0.1):
 
+        self.adversarial = False
         self.pred = True
         self.no_cuda = False
         self.cal_sent_sim = False
@@ -152,7 +154,10 @@ class Args(object):
         self.hidden_size = hidden_size
         self.emb_dim = emb_dim
 
-        self.transformer = None
+        self.transformer = transformer
+        self.num_attention_heads = num_attention_heads
+        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.hidden_dropout_prob = hidden_dropout_prob
 
 class SupervisedBert(object):
 
@@ -261,6 +266,8 @@ class SupervisedBert(object):
         """
         assert self.args.output_file is not None
 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+                                    self.args)
         self.trainer.load_best()
         pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
                         sents, batch_size=self.args.batch_size, 

@@ -1,6 +1,12 @@
 import torch
+import logging
 from torch import nn
 from src.bert_modeling import BertConfig, BERTSelfAttention, BERTAttention
+
+logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
+                    datefmt = '%m/%d/%Y %H:%M:%S',
+                    level = logging.INFO)
+logger = logging.getLogger(__name__)
 
 class SelfAttentionMap(nn.Module):
 
@@ -14,7 +20,7 @@ class SelfAttentionMap(nn.Module):
         self.config.num_attention_heads = args.num_attention_heads
         self.config.attention_probs_dropout_prob = args.attention_probs_dropout_prob
         self.self = BERTSelfAttention(self.config)
-        print ("Self Attention Mapping:\nHidden Size:{}\nAttention Heads:{}\nAttention Dropout:{}".format(self.config.hidden_size, 
+        logger.info("Self Attention Mapping:\nHidden Size:{}\nAttention Heads:{}\nAttention Dropout:{}".format(self.config.hidden_size, 
                 self.config.num_attention_heads, self.config.attention_probs_dropout_prob))
 
     def forward(self, input_tensor, attention_mask=None):
