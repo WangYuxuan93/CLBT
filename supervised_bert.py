@@ -124,7 +124,7 @@ class Args(object):
                 output_file, max_seq_length=128, bert_layer=-1, map_input=False,
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
                 non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
-                emb_dim=768):
+                emb_dim=768, transformer=None):
 
         self.pred = True
         self.no_cuda = False
@@ -151,6 +151,8 @@ class Args(object):
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.emb_dim = emb_dim
+
+        self.transformer = None
 
 class SupervisedBert(object):
 
@@ -282,7 +284,10 @@ class SupervisedBert(object):
                     all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
                                                 attention_mask=input_mask)
                     src_encoder_layer = all_encoder_layers[self.args.bert_layer]
-                    target_layer = self.trainer.mapping(src_encoder_layer)
+                    if self.args.transformer:
+                        target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
+                    else:
+                        target_layer = self.trainer.mapping(src_encoder_layer)
 
                 for b, example_index in enumerate(example_indices):
                     feature = features[example_index.item()]
