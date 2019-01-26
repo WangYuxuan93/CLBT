@@ -70,6 +70,16 @@ class BiInputFeatures(object):
         self.align_ids_a, self.align_ids_b = align
         self.align_mask = align_mask
 
+def check_token(vocab, tokens, unk_token="[UNK]"):
+    new_tokens = []
+    for token in tokens.split(' '):
+        if token not in vocab:
+            logger.info("missed token: %s" % token)
+            new_tokens.append(unk_token)
+        else:
+            new_tokens.append(token)
+    return new_tokens
+
 def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=None, aligns=None):
     """Loads a data file into a list of `InputBatch`s."""
 
@@ -81,11 +91,18 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=Non
     for (ex_index, example) in enumerate(examples):
         if ex_index % 1000 == 0:
             print ("\r%d" % ex_index, end="")
-        tokens_a = tokenizer.tokenize(example.text_a)
-        if tokenizer1:
-            tokens_b = tokenizer1.tokenize(example.text_b)
+        if aligns:
+            tokens_a = check_token(tokenizer.vocab, example.text_a)
+            if tokenizer1:
+                tokens_b = check_token(tokenizer1.vocab, example.text_b)
+            else:
+                tokens_b = check_token(tokenizer.vocab, example.text_b)
         else:
-            tokens_b = tokenizer.tokenize(example.text_b)
+            tokens_a = tokenizer.tokenize(example.text_a)
+            if tokenizer1:
+                tokens_b = tokenizer1.tokenize(example.text_b)
+            else:
+                tokens_b = tokenizer.tokenize(example.text_b)
 
         # Account for [CLS] and [SEP] with "- 2"
         if len(tokens_a) > seq_length - 2:
