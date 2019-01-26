@@ -328,11 +328,12 @@ def load_aligns(file):
             src_ids, tgt_ids = [], []
             for pair in align:
                 src, tgt = [int(n) for n in pair]
-                src_ids.append(src)
-                tgt_ids.append(tgt)
-            #aligns.append((src_ids, tgt_ids))
-            # add one to include [CLS]
-            aligns.append((src_ids+1, tgt_ids+1))
+                #src_ids.append(src)
+                #tgt_ids.append(tgt)
+                # add one to include [CLS]
+                src_ids.append(src+1)
+                tgt_ids.append(tgt+1)
+            aligns.append((src_ids, tgt_ids))
             """
             map, rev_map = {}, {}
             for pair in align:
