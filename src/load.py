@@ -330,7 +330,9 @@ def load_aligns(file):
                 src, tgt = [int(n) for n in pair]
                 src_ids.append(src)
                 tgt_ids.append(tgt)
-            aligns.append((src_ids, tgt_ids))
+            #aligns.append((src_ids, tgt_ids))
+            # add one to include [CLS]
+            aligns.append((src_ids+1, tgt_ids+1))
             """
             map, rev_map = {}, {}
             for pair in align:
