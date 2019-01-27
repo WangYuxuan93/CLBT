@@ -87,9 +87,10 @@ def build_model(args, with_dis):
         mapping = None
     elif not args.bert_config_file1:
         mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
+        if getattr(args, 'map_id_init', True):
+            mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     else:
         mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
-    if not args.non_linear and not args.transformer:
         if getattr(args, 'map_id_init', True):
             mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     mapping.to(device)
