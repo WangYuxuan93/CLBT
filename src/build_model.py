@@ -93,7 +93,8 @@ def build_model(args, with_dis):
         mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
         if getattr(args, 'map_id_init', True):
             mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
-    mapping.to(device)
+    if mapping:
+        mapping.to(device)
 
     # discriminator
     discriminator = None
@@ -106,7 +107,8 @@ def build_model(args, with_dis):
                                                           output_device=args.local_rank)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
-        mapping = torch.nn.DataParallel(mapping)
+        if mapping:
+            mapping = torch.nn.DataParallel(mapping)
         if model1:
             model1 = torch.nn.DataParallel(model1)
         if args.adversarial:
