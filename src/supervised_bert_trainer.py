@@ -232,6 +232,13 @@ class SupervisedBertTrainer(object):
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
 
+        if self.args.fine_tune:
+            logger.info('* Saving the src BERT model to %s ...' % path)
+            if isinstance(self.bert_model, torch.nn.DataParallel):
+                torch.save(self.bert_model.module.state_dict(), path)
+            else:
+                torch.save(self.bert_model.state_dict(), path)
+
         logger.info('* Saving the mapping to %s ...' % path)
         if isinstance(self.mapping, torch.nn.DataParallel):
             torch.save(self.mapping.module.state_dict(), path)
