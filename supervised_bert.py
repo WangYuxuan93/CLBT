@@ -106,6 +106,7 @@ def main():
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1, help="attention hidden layer dropout rate")
     # Fine-tuning
     parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
+    parser.add_argument("--save_sim", type=bool_flag, default=True, help="Save model by cosine similarity?")
     # parse parameters
     args = parser.parse_args()
 
@@ -257,7 +258,11 @@ class SupervisedBert(object):
                     save_path = path4loss
                 self.trainer.save_model(save_path+'/best_mapping.pkl')
                 min_loss = to_log["loss"]
-            self.trainer.save_best(to_log, "avg_cosine_similarity") 
+            if self.args.save_sim:
+                self.trainer.save_best(to_log, "avg_cosine_similarity")
+            else:
+                if to_log["avg_cosine_similarity"] > self.trainer.best_valid_metric:
+                    self.trainer.best_valid_metric = to_log["avg_cosine_similarity"]
             self.logger.info("Max avg cos sim:{:.6f}, Min avg loss:{:.6f}".format(self.trainer.best_valid_metric, min_loss))
             #self.logger.info('End of epoch %i.\n\n' % n_epoch)
             if n_without_improvement >= self.args.quit_after_n_epochs_without_improvement:

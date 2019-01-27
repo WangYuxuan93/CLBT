@@ -39,8 +39,8 @@ class SupervisedBertTrainer(object):
         # optimizers
         if hasattr(args, 'map_optimizer'):
             optim_fn, optim_args = get_optimizer(args.map_optimizer)
-            if self.fine_tune:
-                self.map_optimizer = optim_fn(bert_model).parameters(), **optim_args)
+            if self.args.fine_tune:
+                self.map_optimizer = optim_fn(bert_model.parameters(), **optim_args)
             else:
                 self.map_optimizer = optim_fn(mapping.parameters(), **optim_args)
 
@@ -241,6 +241,7 @@ class SupervisedBertTrainer(object):
                 torch.save(self.bert_model.module.state_dict(), path)
             else:
                 torch.save(self.bert_model.state_dict(), path)
+            return
 
         logger.info('* Saving the mapping to %s ...' % path)
         if isinstance(self.mapping, torch.nn.DataParallel):
