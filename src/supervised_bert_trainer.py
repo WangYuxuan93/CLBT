@@ -39,7 +39,10 @@ class SupervisedBertTrainer(object):
         # optimizers
         if hasattr(args, 'map_optimizer'):
             optim_fn, optim_args = get_optimizer(args.map_optimizer)
-            self.map_optimizer = optim_fn(mapping.parameters(), **optim_args)
+            if self.fine_tune:
+                self.map_optimizer = optim_fn(bert_model).parameters(), **optim_args)
+            else:
+                self.map_optimizer = optim_fn(mapping.parameters(), **optim_args)
 
         # best validation score
         self.best_valid_metric = -1e12
