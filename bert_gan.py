@@ -141,6 +141,7 @@ class Args(object):
         self.do_lower_case = True
         self.map_input = map_input
         self.transformer = None
+        self.fine_tune = False
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file

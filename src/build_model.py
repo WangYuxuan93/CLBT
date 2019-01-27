@@ -83,6 +83,8 @@ def build_model(args, with_dis):
             mapping = SelfAttentionMap(args)
         elif args.transformer == 'attention':
             mapping = AttentionMap(args)
+    elif args.fine_tune:
+        mapping = None
     elif not args.bert_config_file1:
         mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
     else:

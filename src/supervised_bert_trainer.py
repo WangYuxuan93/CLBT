@@ -130,6 +130,18 @@ class SupervisedBertTrainer(object):
         # [batch_size, seq_len, output_dim]
         return encoder_layer
 
+    def get_trainable_unmasked_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
+        """
+        Get BERT
+        """
+        if model_id == 0 or self.bert_model1 is None:
+            all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
+        else:
+            all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
+        encoder_layer = all_encoder_layers[bert_layer]
+        # [batch_size, seq_len, output_dim]
+        return encoder_layer
+
     def select(self, layer, mask):
         """
         Select all unmasked embed in this batch
@@ -164,9 +176,14 @@ class SupervisedBertTrainer(object):
         """
         Get bert according to index and align_mask
         """
-        unmasked_bert = self.get_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
+        if self.args.fine_tune:
+            unmasked_bert = self.get_trainable_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
+        else:
+            unmasked_bert = self.get_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
         if self.args.transformer:
             mapped_bert = self.mapping(unmasked_bert, input_mask)
+        elif self.args.fine_tune:
+            mapped_bert = unmasked_bert
         else:
             mapped_bert = self.mapping(unmasked_bert)
         rearanged_bert = self.rearange(mapped_bert, index)

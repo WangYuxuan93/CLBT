@@ -104,6 +104,8 @@ def main():
     parser.add_argument("--num_attention_heads", type=int, default=12, help="attention head number")
     parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1, help="attention probability dropout rate")
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1, help="attention hidden layer dropout rate")
+    # Fine-tuning
+    parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
     # parse parameters
     args = parser.parse_args()
 
@@ -125,7 +127,8 @@ class Args(object):
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
                 non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
                 emb_dim=768, transformer=None, num_attention_heads=12, 
-                attention_probs_dropout_prob=0.1, hidden_dropout_prob=0.1):
+                attention_probs_dropout_prob=0.1, hidden_dropout_prob=0.1,
+                fine_tune=False):
 
         self.adversarial = False
         self.pred = True
@@ -135,6 +138,7 @@ class Args(object):
         self.batch_size = 32
         self.do_lower_case = True
         self.map_input = map_input
+        self.fine_tune = fine_tune
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file
@@ -293,6 +297,8 @@ class SupervisedBert(object):
                     src_encoder_layer = all_encoder_layers[self.args.bert_layer]
                     if self.args.transformer:
                         target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
+                    elif self.args.fine_tune:
+                        target_layer = src_encoder_layer
                     else:
                         target_layer = self.trainer.mapping(src_encoder_layer)
 

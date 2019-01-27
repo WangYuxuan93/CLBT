@@ -68,6 +68,9 @@ def main():
     parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
     parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
     parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
+    # false flags
+    parser.add_argument("--transformer", type=str, default=None, help="self_attention|attention")
+    parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
     # parse parameters
     params = parser.parse_args()
 
