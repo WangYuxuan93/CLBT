@@ -56,11 +56,13 @@ def build_model(args, with_dis):
         torch.distributed.init_process_group(backend='nccl')
     print("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
 
+    bert_config = BertConfig.from_json_file(args.bert_config_file)
+    bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
     if args.load_pred_bert:
         model = None
         model1 = None
     else:
-        bert_config = BertConfig.from_json_file(args.bert_config_file)
+        
         model = BertModel(bert_config)
         if args.init_checkpoint is not None:
             model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
@@ -68,7 +70,7 @@ def build_model(args, with_dis):
 
         model1 = None
         if args.bert_config_file1 and args.init_checkpoint1:
-            bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+            
             model1 = BertModel(bert_config1)
             if args.init_checkpoint is not None:
                 model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
