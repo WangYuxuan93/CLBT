@@ -197,7 +197,7 @@ class SupervisedBert(object):
             assert self.args.bert_file1 is not None
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
-                max_seq_length=self.args.max_seq_length, local_rank=self.args.local_rank, 
+                max_seq_length=self.args.max_seq_length, 
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
         else:
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file,
@@ -230,9 +230,10 @@ class SupervisedBert(object):
             if self.args.load_pred_bert:
                 for input_embs_a, input_mask_a, input_embs_b, input_mask_b, align_ids_a, align_ids_b, align_mask, example_indices in train_loader:
                     n_batch += 1
-                    input_embs_a = input_embs_a.to(self.device)
-                    input_mask_a = input_mask_a.to(self.device)
-                    input_embs_b = input_embs_b.to(self.device)
+                    with torch.no_grad():
+                        input_embs_a = input_embs_a.to(self.device)
+                        input_mask_a = input_mask_a.to(self.device)
+                        input_embs_b = input_embs_b.to(self.device)
                     align_ids_a = align_ids_a.to(self.device)
                     align_ids_b = align_ids_b.to(self.device)
                     align_mask = align_mask.to(self.device)

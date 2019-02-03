@@ -24,6 +24,7 @@ import collections
 import logging
 import json
 import re
+import numpy as np
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -315,7 +316,7 @@ def convert_bert_examples_to_features(examples, seq_length, tokenizer, tokenizer
                 logger.info("align_mask: %s" % " ".join([str(x) for x in align_mask]))
         if aligns:
             features.append(
-                BiInputFeatures(
+                BiInputBertFeatures(
                     unique_id=example.unique_id,
                     tokens=[tokens_a, tokens_b],
                     input_ids=[input_ids_a, input_ids_b],
@@ -325,7 +326,7 @@ def convert_bert_examples_to_features(examples, seq_length, tokenizer, tokenizer
                     align_mask=align_mask))
         else:
             features.append(
-                BiInputFeatures(
+                BiInputBertFeatures(
                     unique_id=example.unique_id,
                     tokens=[tokens_a, tokens_b],
                     input_ids=[input_ids_a, input_ids_b],
@@ -452,6 +453,7 @@ def load_bert(input_file_a, input_file_b):
     with codecs.open(input_file_a, encoding='utf-8', errors='ignore') as f_a, codecs.open(input_file_b, encoding='utf-8', errors='ignore') as f_b:
         while True:
             line_a = f_a.readline()
+            line_b = f_b.readline()
             if not line_a or not line_b:
                 break
             # src bert
@@ -469,9 +471,10 @@ def load_bert(input_file_a, input_file_b):
             toks_b = [item["token"] for item in bert_b]
             assert len(embs_b) == len(toks_b)
             try:
-                assert unique_id_a == unique_id_b
+                assert unique_id_a == unique_id_b 
             except:
                 print ("BERT id mismatch: id_a:{}, id_b:{}".format(unique_id_a, unique_id_b))
+            unique_id = unique_id_a
             examples.append(
               InputBertExample(unique_id=unique_id, embs_a=embs_a, toks_a=toks_a, embs_b=embs_b, toks_b=toks_b))
 
@@ -606,7 +609,7 @@ def load_from_bert(vocab_file, input_file_a, input_file_b, do_lower_case=True,
     all_input_embs_b = torch.tensor([f.input_embs_b for f in features], dtype=torch.float)
     all_input_mask_a = torch.tensor([f.input_mask_a for f in features], dtype=torch.long)
     all_input_mask_b = torch.tensor([f.input_mask_b for f in features], dtype=torch.long)
-    all_example_index = torch.arange(all_input_ids_a.size(0), dtype=torch.long)
+    all_example_index = torch.arange(all_input_mask_a.size(0), dtype=torch.long)
 
     if align_file:
         all_align_ids_a = torch.tensor([f.align_ids_a for f in features], dtype=torch.long)
