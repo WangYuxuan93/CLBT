@@ -15,7 +15,7 @@ import torch
 import string
 
 from src.utils import bool_flag, initialize_exp
-from src.load import load, load_single, convert
+from src.load import load, load_single, convert, load_from_bert
 from src.build_model import build_model
 from src.supervised_bert_trainer import SupervisedBertTrainer
 from src.bert_evaluator import BertEvaluator
@@ -104,6 +104,9 @@ def main():
     parser.add_argument("--num_attention_heads", type=int, default=12, help="attention head number")
     parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1, help="attention probability dropout rate")
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1, help="attention hidden layer dropout rate")
+    parser.add_argument("--load_pred_bert", action='store_true', default=False, help="Directly load predicted BERT")
+    parser.add_argument("--bert_file0", default=None, type=str, help="Input predicted BERT file for language 0")
+    parser.add_argument("--bert_file1", default=None, type=str, help="Input predicted BERT file for language 1")
     # Fine-tuning
     parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
     parser.add_argument("--save_sim", type=bool_flag, default=True, help="Save model by cosine similarity?")
@@ -189,7 +192,15 @@ class SupervisedBert(object):
         """
         """
 
-        self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file,
+        if self.args.load_pred_bert:
+            assert self.args.bert_file0 is not None
+            assert self.args.bert_file1 is not None
+            self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
+                self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
+                max_seq_length=self.args.max_seq_length, local_rank=self.args.local_rank, 
+                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
+        else:
+            self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file,
                 batch_size=self.args.batch_size, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, local_rank=self.args.local_rank, 
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
@@ -216,30 +227,55 @@ class SupervisedBert(object):
             n_batch = 0
             to_log = {"avg_cosine_similarity": 0, "loss": 0}
 
-            for input_ids_a, input_mask_a, input_ids_b, input_mask_b, align_ids_a, align_ids_b, align_mask, example_indices in train_loader:
-                n_batch += 1
-                input_ids_a = input_ids_a.to(self.device)
-                input_mask_a = input_mask_a.to(self.device)
-                input_ids_b = input_ids_b.to(self.device)
-                input_mask_b = input_mask_b.to(self.device)
-                align_ids_a = align_ids_a.to(self.device)
-                align_ids_b = align_ids_b.to(self.device)
-                align_mask = align_mask.to(self.device)
-                #print (align_ids_a, align_ids_b, align_mask)
-                src_bert = self.trainer.get_indexed_mapped_bert(
-                                input_ids_a, input_mask_a, align_ids_a, align_mask, 
-                                bert_layer=self.args.bert_layer, model_id=0)
-                tgt_bert = self.trainer.get_indexed_bert(
-                                input_ids_b, input_mask_b, align_ids_b, align_mask,
-                                bert_layer=self.args.bert_layer, model_id=1)
+            if self.args.load_pred_bert:
+                for input_embs_a, input_mask_a, input_embs_b, input_mask_b, align_ids_a, align_ids_b, align_mask, example_indices in train_loader:
+                    n_batch += 1
+                    input_embs_a = input_embs_a.to(self.device)
+                    input_mask_a = input_mask_a.to(self.device)
+                    input_embs_b = input_embs_b.to(self.device)
+                    align_ids_a = align_ids_a.to(self.device)
+                    align_ids_b = align_ids_b.to(self.device)
+                    align_mask = align_mask.to(self.device)
+                    #print (align_ids_a, align_ids_b, align_mask)
+                    src_bert = self.trainer.get_indexed_mapped_bert_from_bert(
+                                    input_embs_a, input_mask_a, align_ids_a, align_mask, 
+                                    bert_layer=self.args.bert_layer, model_id=0)
+                    tgt_bert = self.trainer.get_indexed_bert_from_bert(
+                                    input_embs_b, align_ids_b, align_mask,
+                                    bert_layer=self.args.bert_layer, model_id=1)
 
-                avg_cos_sim, loss = self.trainer.supervised_mapping_step(src_bert, tgt_bert)
-                n_inst += src_bert.size()[0]
-                cos_sim = avg_cos_sim.cpu().detach().numpy()
-                loss_ = loss.cpu().detach().numpy()
+                    avg_cos_sim, loss = self.trainer.supervised_mapping_step(src_bert, tgt_bert)
+                    n_inst += src_bert.size()[0]
+                    cos_sim = avg_cos_sim.cpu().detach().numpy()
+                    loss_ = loss.cpu().detach().numpy()
 
-                to_log["avg_cosine_similarity"] += cos_sim
-                to_log["loss"] += loss_
+                    to_log["avg_cosine_similarity"] += cos_sim
+                    to_log["loss"] += loss_
+            else:
+                for input_ids_a, input_mask_a, input_ids_b, input_mask_b, align_ids_a, align_ids_b, align_mask, example_indices in train_loader:
+                    n_batch += 1
+                    input_ids_a = input_ids_a.to(self.device)
+                    input_mask_a = input_mask_a.to(self.device)
+                    input_ids_b = input_ids_b.to(self.device)
+                    input_mask_b = input_mask_b.to(self.device)
+                    align_ids_a = align_ids_a.to(self.device)
+                    align_ids_b = align_ids_b.to(self.device)
+                    align_mask = align_mask.to(self.device)
+                    #print (align_ids_a, align_ids_b, align_mask)
+                    src_bert = self.trainer.get_indexed_mapped_bert(
+                                    input_ids_a, input_mask_a, align_ids_a, align_mask, 
+                                    bert_layer=self.args.bert_layer, model_id=0)
+                    tgt_bert = self.trainer.get_indexed_bert(
+                                    input_ids_b, input_mask_b, align_ids_b, align_mask,
+                                    bert_layer=self.args.bert_layer, model_id=1)
+
+                    avg_cos_sim, loss = self.trainer.supervised_mapping_step(src_bert, tgt_bert)
+                    n_inst += src_bert.size()[0]
+                    cos_sim = avg_cos_sim.cpu().detach().numpy()
+                    loss_ = loss.cpu().detach().numpy()
+
+                    to_log["avg_cosine_similarity"] += cos_sim
+                    to_log["loss"] += loss_
             to_log["avg_cosine_similarity"] /= n_batch
             to_log["loss"] /= n_batch
             self.logger.info("Epoch:{}, avg cos sim:{:.6f}, avg loss:{:.6f}, instances:{}".format(n_epoch, to_log["avg_cosine_similarity"], to_log["loss"], n_inst))

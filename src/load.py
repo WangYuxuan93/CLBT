@@ -46,6 +46,14 @@ class InputExample(object):
         self.text_a = text_a
         self.text_b = text_b
 
+class InputBertExample(object):
+
+    def __init__(self, unique_id, embs_a, toks_a, embs_b, toks_b):
+        self.unique_id = unique_id
+        self.embs_a = embs_a
+        self.toks_a = toks_a
+        self.embs_b = embs_b
+        self.toks_b = toks_b
 
 class InputFeatures(object):
     """A single set of features of data."""
@@ -70,9 +78,22 @@ class BiInputFeatures(object):
         self.align_ids_a, self.align_ids_b = align
         self.align_mask = align_mask
 
+class BiInputBertFeatures(object):
+    """A single set of features of data."""
+
+    def __init__(self, unique_id, tokens, input_ids, input_mask, input_embs, 
+                    align=[None,None], align_mask=None):
+        self.unique_id = unique_id
+        self.tokens_a, self.tokens_b = tokens
+        self.input_ids_a, self.input_ids_b = input_ids
+        self.input_mask_a, self.input_mask_b = input_mask
+        self.input_embs_a, self.input_embs_b = input_embs
+        self.align_ids_a, self.align_ids_b = align
+        self.align_mask = align_mask
+
 def check_token(vocab, tokens, unk_token="[UNK]"):
     new_tokens = []
-    for token in tokens.split(' '):
+    for token in tokens:
         if token not in vocab:
             logger.info("missed token: %s" % token)
             new_tokens.append(unk_token)
@@ -92,11 +113,11 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=Non
         if ex_index % 1000 == 0:
             print ("\r%d" % ex_index, end="")
         if aligns:
-            tokens_a = check_token(tokenizer.vocab, example.text_a)
+            tokens_a = check_token(tokenizer.vocab, example.text_a.split(' '))
             if tokenizer1:
-                tokens_b = check_token(tokenizer1.vocab, example.text_b)
+                tokens_b = check_token(tokenizer1.vocab, example.text_b.split(' '))
             else:
-                tokens_b = check_token(tokenizer.vocab, example.text_b)
+                tokens_b = check_token(tokenizer.vocab, example.text_b.split(' '))
         else:
             tokens_a = tokenizer.tokenize(example.text_a)
             if tokenizer1:
@@ -205,6 +226,111 @@ def convert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=Non
                     input_ids=[input_ids_a_, input_ids_b_],
                     input_mask=[input_mask_a_, input_mask_b_],
                     input_lan_ids=[input_lan_ids_a_, input_lan_ids_b_]))
+    return features
+
+def convert_bert_examples_to_features(examples, seq_length, tokenizer, tokenizer1=None, aligns=None):
+    """Loads a data file into a list of `InputBatch`s."""
+
+    if aligns:
+        lens = [len(a[0]) for a in aligns]
+        max_align = max(lens)
+        logger.info("aligned word number: %s" % (sum(lens)))
+    emb_pad_a = np.zeros(len(examples[0].embs_a[0]))
+    emb_pad_b = np.zeros(len(examples[0].embs_b[0]))
+    features = []
+    for (ex_index, example) in enumerate(examples):
+        if ex_index % 1000 == 0:
+            print ("\r%d" % ex_index, end="")
+        tokens_a = check_token(tokenizer.vocab, example.toks_a)
+        if tokenizer1:
+            tokens_b = check_token(tokenizer1.vocab, example.toks_b)
+        else:
+            tokens_b = check_token(tokenizer.vocab, example.toks_b)
+
+        assert len(tokens_a) <= seq_length
+        assert len(tokens_b) <= seq_length
+
+        input_ids_a = tokenizer.convert_tokens_to_ids(tokens_a)
+        if tokenizer1:
+            input_ids_b = tokenizer1.convert_tokens_to_ids(tokens_b)
+        else:
+            input_ids_b = tokenizer.convert_tokens_to_ids(tokens_b)
+        input_embs_a = example.embs_a
+        input_embs_b = example.embs_b
+
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask_a = [1] * len(input_ids_a)
+        input_mask_b = [1] * len(input_ids_b)
+
+        # Zero-pad up to the sequence length.
+        while len(input_ids_a) < seq_length:
+            input_ids_a.append(0)
+            input_mask_a.append(0)
+            input_embs_a.append(emb_pad_a)
+        while len(input_ids_b) < seq_length:
+            input_ids_b.append(0)
+            input_mask_b.append(0)
+            input_embs_b.append(emb_pad_b)
+
+        assert len(input_ids_a) == seq_length
+        assert len(input_mask_a) == seq_length
+        assert len(input_embs_a) == seq_length
+        assert len(input_ids_b) == seq_length
+        assert len(input_mask_b) == seq_length
+        assert len(input_embs_b) == seq_length
+
+        input_embs_a = np.stack(input_embs_a, 0)
+        input_embs_b = np.stack(input_embs_b, 0)
+
+        # for alignment
+        if aligns:
+            align_ids_a, align_ids_b = aligns[ex_index]
+            assert len(align_ids_a) == len(align_ids_b)
+            align_mask = [1] * len(align_ids_a)
+            while len(align_ids_a) < max_align:
+                align_ids_a.append(0)
+                align_ids_b.append(0)
+                align_mask.append(0)
+
+            assert len(align_ids_a) == max_align
+            assert len(align_ids_b) == max_align
+            assert len(align_mask) == max_align
+
+        if ex_index < 2:
+            logger.info("*** Example ***")
+            logger.info("unique_id: %s" % (example.unique_id))
+            logger.info("lan0 tokens: %s" % " ".join([str(x) for x in tokens_a]))
+            logger.info("lan0 input_ids: %s" % " ".join([str(x) for x in input_ids_a]))
+            logger.info("lan0 input_mask: %s" % " ".join([str(x) for x in input_mask_a]))
+            logger.info("lan0 input_emb {}: \n{}".format(input_embs_a.shape, input_embs_a))
+            logger.info("lan1 tokens: %s" % " ".join([str(x) for x in tokens_b]))
+            logger.info("lan1 input_ids: %s" % " ".join([str(x) for x in input_ids_b]))
+            logger.info("lan1 input_mask: %s" % " ".join([str(x) for x in input_mask_b]))
+            logger.info("lan1 input_emb {}: \n{}".format(input_embs_b.shape, input_embs_b))
+
+            if aligns:
+                logger.info("align_ids_a: %s" % " ".join([str(x) for x in align_ids_a]))
+                logger.info("align_ids_b: %s" % " ".join([str(x) for x in align_ids_b]))
+                logger.info("align_mask: %s" % " ".join([str(x) for x in align_mask]))
+        if aligns:
+            features.append(
+                BiInputFeatures(
+                    unique_id=example.unique_id,
+                    tokens=[tokens_a, tokens_b],
+                    input_ids=[input_ids_a, input_ids_b],
+                    input_mask=[input_mask_a, input_mask_b],
+                    input_embs=[input_embs_a, input_embs_b],
+                    align=[align_ids_a, align_ids_b],
+                    align_mask=align_mask))
+        else:
+            features.append(
+                BiInputFeatures(
+                    unique_id=example.unique_id,
+                    tokens=[tokens_a, tokens_b],
+                    input_ids=[input_ids_a, input_ids_b],
+                    input_mask=[input_mask_a, input_mask_b],
+                    input_embs=[input_embs_a, input_embs_b]))
     return features
 
 def convert_examples_to_features_single(examples, seq_length, tokenizer):
@@ -319,6 +445,38 @@ def read_examples(input_file):
             unique_id += 1
     return examples
 
+def load_bert(input_file_a, input_file_b):
+    """Read a list of `InputExample`s from an input file."""
+    examples = []
+
+    with codecs.open(input_file_a, encoding='utf-8', errors='ignore') as f_a, codecs.open(input_file_b, encoding='utf-8', errors='ignore') as f_b:
+        while True:
+            line_a = f_a.readline()
+            if not line_a or not line_b:
+                break
+            # src bert
+            bert_a = json.loads(line_a)
+            unique_id_a = int(bert_a["linex_index"])
+            bert_a = bert_a["features"]
+            embs_a = [np.array(item["layers"][0]["values"]) for item in bert_a]
+            toks_a = [item["token"] for item in bert_a]
+            assert len(embs_a) == len(toks_a)
+            # tgt bert
+            bert_b = json.loads(line_b)
+            unique_id_b = int(bert_b["linex_index"])
+            bert_b = bert_b["features"]
+            embs_b = [np.array(item["layers"][0]["values"]) for item in bert_b]
+            toks_b = [item["token"] for item in bert_b]
+            assert len(embs_b) == len(toks_b)
+            try:
+                assert unique_id_a == unique_id_b
+            except:
+                print ("BERT id mismatch: id_a:{}, id_b:{}".format(unique_id_a, unique_id_b))
+            examples.append(
+              InputBertExample(unique_id=unique_id, embs_a=embs_a, toks_a=toks_a, embs_b=embs_b, toks_b=toks_b))
+
+    return examples
+
 def load_aligns(file):
     """Load the word-level alignment, only one-to-one word pairs are kept"""
     #maps, rev_maps = [], []
@@ -407,6 +565,59 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     else:
         dataset = TensorDataset(all_input_ids_a, all_input_mask_a, 
                         all_input_ids_b, all_input_mask_b, all_example_index)
+    #if local_rank == -1:
+    #    sampler = SequentialSampler(dataset)
+        #sampler = RandomSampler(dataset)
+    #else:
+    #    sampler = DistributedSampler(dataset)
+    #dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)
+
+    return dataset, unique_id_to_feature, features
+
+def load_from_bert(vocab_file, input_file_a, input_file_b, do_lower_case=True, 
+            max_seq_length=128, vocab_file1=None, align_file=None):
+
+    tokenizer = tokenization.FullTokenizer(
+        vocab_file=vocab_file, do_lower_case=do_lower_case)
+    tokenizer1 = tokenization.FullTokenizer(
+        vocab_file=vocab_file1, do_lower_case=do_lower_case)
+
+    examples = load_bert(input_file_a, input_file_b)
+
+    aligns = None
+    if align_file:
+        aligns = load_aligns(align_file)
+        try:
+            assert len(examples) == len(aligns)
+        except:
+            raise ValueError("Number of examples({}) and alignments({}) mismatch!".format(len(examples),len(aligns)))
+
+    features = convert_bert_examples_to_features(
+        examples=examples, seq_length=max_seq_length, tokenizer=tokenizer, 
+        tokenizer1=tokenizer1, aligns=aligns)
+
+    unique_id_to_feature = {}
+    for feature in features:
+        unique_id_to_feature[feature.unique_id] = feature
+
+    #all_input_ids_a = torch.tensor([f.input_ids_a for f in features], dtype=torch.long)
+    #all_input_ids_b = torch.tensor([f.input_ids_b for f in features], dtype=torch.long)
+    all_input_embs_a = torch.tensor([f.input_embs_a for f in features], dtype=torch.float)
+    all_input_embs_b = torch.tensor([f.input_embs_b for f in features], dtype=torch.float)
+    all_input_mask_a = torch.tensor([f.input_mask_a for f in features], dtype=torch.long)
+    all_input_mask_b = torch.tensor([f.input_mask_b for f in features], dtype=torch.long)
+    all_example_index = torch.arange(all_input_ids_a.size(0), dtype=torch.long)
+
+    if align_file:
+        all_align_ids_a = torch.tensor([f.align_ids_a for f in features], dtype=torch.long)
+        all_align_ids_b = torch.tensor([f.align_ids_b for f in features], dtype=torch.long)
+        all_align_mask = torch.tensor([f.align_mask for f in features], dtype=torch.long)
+        dataset = TensorDataset(all_input_embs_a, all_input_mask_a, 
+                        all_input_embs_b, all_input_mask_b, all_align_ids_a, all_align_ids_b,
+                        all_align_mask, all_example_index)
+    else:
+        dataset = TensorDataset(all_input_embs_a, all_input_mask_a, 
+                        all_input_embs_b, all_input_mask_b, all_example_index)
     #if local_rank == -1:
     #    sampler = SequentialSampler(dataset)
         #sampler = RandomSampler(dataset)
