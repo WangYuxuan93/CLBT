@@ -446,7 +446,7 @@ def read_examples(input_file):
             unique_id += 1
     return examples
 
-def load_bert(input_file_a, input_file_b):
+def load_bert(input_file_a, input_file_b, n_max_sent=None):
     """Read a list of `InputExample`s from an input file."""
     examples = []
 
@@ -477,10 +477,14 @@ def load_bert(input_file_a, input_file_b):
             unique_id = unique_id_a
             examples.append(
               InputBertExample(unique_id=unique_id, embs_a=embs_a, toks_a=toks_a, embs_b=embs_b, toks_b=toks_b))
+            if unique_id % 1000 == 0:
+                print ("\r%d" % unique_id, end="")
+            if n_max_sent is not None and unique_id >= n_max_sent-1:
+                break
 
     return examples
 
-def load_aligns(file):
+def load_aligns(file, n_max_sent=None):
     """Load the word-level alignment, only one-to-one word pairs are kept"""
     #maps, rev_maps = [], []
     aligns = []
@@ -512,6 +516,8 @@ def load_aligns(file):
                 src_ids.append(src+1)
                 tgt_ids.append(tgt+1)
             aligns.append((src_ids, tgt_ids))
+            if n_max_sent and len(aligns) >= n_max_sent:
+                break
             """
             map, rev_map = {}, {}
             for pair in align:
@@ -578,18 +584,18 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     return dataset, unique_id_to_feature, features
 
 def load_from_bert(vocab_file, input_file_a, input_file_b, do_lower_case=True, 
-            max_seq_length=128, vocab_file1=None, align_file=None):
+            max_seq_length=128, vocab_file1=None, align_file=None, n_max_sent=None):
 
     tokenizer = tokenization.FullTokenizer(
         vocab_file=vocab_file, do_lower_case=do_lower_case)
     tokenizer1 = tokenization.FullTokenizer(
         vocab_file=vocab_file1, do_lower_case=do_lower_case)
 
-    examples = load_bert(input_file_a, input_file_b)
+    examples = load_bert(input_file_a, input_file_b, n_max_sent=n_max_sent)
 
     aligns = None
     if align_file:
-        aligns = load_aligns(align_file)
+        aligns = load_aligns(align_file, n_max_sent=n_max_sent)
         try:
             assert len(examples) == len(aligns)
         except:

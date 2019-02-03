@@ -107,6 +107,7 @@ def main():
     parser.add_argument("--load_pred_bert", action='store_true', default=False, help="Directly load predicted BERT")
     parser.add_argument("--bert_file0", default=None, type=str, help="Input predicted BERT file for language 0")
     parser.add_argument("--bert_file1", default=None, type=str, help="Input predicted BERT file for language 1")
+    parser.add_argument("--n_max_sent", type=int, default=None, help="Maximum BERT sentence number")
     # Fine-tuning
     parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
     parser.add_argument("--save_sim", type=bool_flag, default=True, help="Save model by cosine similarity?")
@@ -138,6 +139,7 @@ class Args(object):
         self.pred = True
         self.no_cuda = False
         self.cal_sent_sim = False
+        self.load_pred_bert = False
         self.local_rank = -1
         self.batch_size = 32
         self.do_lower_case = True
@@ -197,7 +199,7 @@ class SupervisedBert(object):
             assert self.args.bert_file1 is not None
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
-                max_seq_length=self.args.max_seq_length, 
+                max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
         else:
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file,

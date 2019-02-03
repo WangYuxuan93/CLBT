@@ -56,20 +56,24 @@ def build_model(args, with_dis):
         torch.distributed.init_process_group(backend='nccl')
     print("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
 
-    bert_config = BertConfig.from_json_file(args.bert_config_file)
-    model = BertModel(bert_config)
-    if args.init_checkpoint is not None:
-        model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
-    model.to(device)
-
-    model1 = None
-    if args.bert_config_file1 and args.init_checkpoint1:
-        bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
-        model1 = BertModel(bert_config1)
+    if args.load_pred_bert:
+        model = None
+        model1 = None
+    else:
+        bert_config = BertConfig.from_json_file(args.bert_config_file)
+        model = BertModel(bert_config)
         if args.init_checkpoint is not None:
-            model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
-        model1.to(device)
-        assert bert_config.hidden_size == bert_config1.hidden_size
+            model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
+        model.to(device)
+
+        model1 = None
+        if args.bert_config_file1 and args.init_checkpoint1:
+            bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+            model1 = BertModel(bert_config1)
+            if args.init_checkpoint is not None:
+                model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
+            model1.to(device)
+            assert bert_config.hidden_size == bert_config1.hidden_size
 
     # mapping
     if args.non_linear:
@@ -102,15 +106,16 @@ def build_model(args, with_dis):
         discriminator = Discriminator(args, bert_config.hidden_size) if with_dis else None
         discriminator.to(device)
 
-    if args.local_rank != -1:
+    if args.local_rank != -1 and not args.load_pred_bert:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
                                                           output_device=args.local_rank)
     elif n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+        if not args.load_pred_bert:
+            model = torch.nn.DataParallel(model)
+            if model1:
+                model1 = torch.nn.DataParallel(model1)
         if mapping:
             mapping = torch.nn.DataParallel(mapping)
-        if model1:
-            model1 = torch.nn.DataParallel(model1)
         if args.adversarial:
             discriminator = torch.nn.DataParallel(discriminator)
 
