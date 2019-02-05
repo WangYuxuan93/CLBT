@@ -27,7 +27,7 @@ def load_conllu(file):
 
 def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8, 
                   map_input=False, non_linear=False, activation="leaky_relu", n_layers=2, 
-                  hidden_size=768, transformer=None):
+                  hidden_size=768, transformer=None, num_attention_heads=12):
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
@@ -40,6 +40,7 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
                 n_layers=n_layers, hidden_size=hidden_size, transformer=transformer)
   flags.batch_size = batch_size
   flags.map_input = map_input
+  flags.num_attention_heads = num_attention_heads
 
   sup_bert = SupervisedBert(flags)
   sup_bert.list2bert(sents)
@@ -117,6 +118,7 @@ parser.add_argument("--activation", type=str, default='leaky_relu', help="learky
 parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
 parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
 parser.add_argument("--transformer", type=str, default=None, help="mapping transformer type(attention/self_attention)")
+parser.add_argument("--head_num", type=int, default=12, help="attention head number")
 args = parser.parse_args()
 
 map_model = args.mapping
@@ -133,5 +135,5 @@ for sent in load_conllu(conll_file):
 print ("Total {} Sentences".format(len(sents)))
 list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input,
             non_linear=args.non_linear, activation=args.activation, n_layers=args.n_layers,
-            hidden_size=args.hidden_size, transformer=args.transformer)
+            hidden_size=args.hidden_size, transformer=args.transformer, num_attention_heads=args.head_num)
 merge(bert_file, merge_file, sents)

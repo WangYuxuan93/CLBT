@@ -132,7 +132,7 @@ class Args(object):
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
                 non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
                 emb_dim=768, transformer=None, num_attention_heads=12, 
-                attention_probs_dropout_prob=0.1, hidden_dropout_prob=0.1,
+                attention_probs_dropout_prob=0, hidden_dropout_prob=0,
                 fine_tune=False):
 
         self.adversarial = False

@@ -57,7 +57,8 @@ def build_model(args, with_dis):
     print("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
 
     bert_config = BertConfig.from_json_file(args.bert_config_file)
-    bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+    if args.bert_config_file1: 
+        bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
     if args.load_pred_bert:
         model = None
         model1 = None
