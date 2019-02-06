@@ -94,7 +94,7 @@ def main():
     # For supervised learning
     parser.add_argument("--adversarial", default=False, action='store_true', help="Adversarial training?")
     parser.add_argument("--align_file", default=None, type=str, help="The alignment file of paralleled sentences")
-    parser.add_argument("--map_type", type=str, default='linear', help="linear|non_linear|self_attention|attention|fine_tune")
+    parser.add_argument("--map_type", type=str, default='linear', help="linear|nonlinear|self_attention|attention|linear_self_attention|nonlinear_self_attention|fine_tune")
     parser.add_argument("--emb_dim", type=int, default=768, help="BERT embedding dimension")
     # For non-linear mapping
     #parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
@@ -191,6 +191,7 @@ class SupervisedBert(object):
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
         else:
             self.device = torch.device("cuda", self.args.local_rank)
+        self.transformer_types = ['self_attention','attention','linear_self_attention','nonlinear_self_attention']
 
     def train(self):
         """
@@ -209,7 +210,7 @@ class SupervisedBert(object):
                 max_seq_length=self.args.max_seq_length, local_rank=self.args.local_rank, 
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
         self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
-                                    self.args, bert_model1=self.bert_model1)
+                                    self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
 
         sampler = RandomSampler(self.dataset)
         train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.batch_size)
@@ -317,7 +318,7 @@ class SupervisedBert(object):
         assert self.args.output_file is not None
 
         self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
-                                    self.args)
+                                        self.args, trans_types=self.transformer_types)
         self.trainer.load_best()
         pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
                         sents, batch_size=self.args.batch_size, 

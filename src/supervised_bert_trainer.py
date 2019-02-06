@@ -22,7 +22,7 @@ logger = getLogger()
 class SupervisedBertTrainer(object):
 
     def __init__(self, bert_model, mapping, discriminator, args, bert_model1=None,
-                trans_types=['self_attention','attention']):
+                trans_types=['self_attention','attention','linear_self_attention','nonlinear_self_attention']):
         """
         Initialize trainer script.
         """

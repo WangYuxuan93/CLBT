@@ -5,14 +5,18 @@
 # LICENSE file in the root directory of this source tree.
 #
 
+import logging
 import torch
 from torch import nn
 
 from src.utils import load_embeddings, normalize_embeddings
 from src.bert_modeling import BertConfig, BertModel
-from src.maps import NonLinearMap, SelfAttentionMap, AttentionMap
+from src.maps import NonLinearMap, SelfAttentionMap, AttentionMap, LinearSelfAttentionMap, NonLinearSelfAttentionMap
 
-transformer_types = ['self_attention','attention']
+logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
+                    datefmt = '%m/%d/%Y %H:%M:%S',
+                    level = logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Discriminator(nn.Module):
 
@@ -80,7 +84,7 @@ def build_model(args, with_dis):
 
     # mapping
     #if args.non_linear:
-    if args.map_type == 'non_linear':
+    if args.map_type == 'nonlinear':
         assert args.emb_dim == bert_config.hidden_size
         mapping = NonLinearMap(args)
     #elif args.transformer:
@@ -88,13 +92,18 @@ def build_model(args, with_dis):
         mapping = SelfAttentionMap(args)
     elif args.map_type == 'attention':
         mapping = AttentionMap(args)
+    elif args.map_type == 'linear_self_attention':
+        mapping = LinearSelfAttentionMap(args)
+    elif args.map_type == 'nonlinear_self_attention':
+        mapping = NonLinearSelfAttentionMap(args)
     elif args.map_type == 'fine_tune':
         mapping = None
     elif args.map_type == 'linear':
         assert args.emb_dim == bert_config.hidden_size
+        logger.info("Linear mapping:\nEmbedding Dimension:{}".format(ags.emb_dim))
         mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
         if getattr(args, 'map_id_init', True):
-            mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
+            mapping.weight.data.copy_(torch.diag(torch.ones(args.emb_dim)))
     else:
         raise ValueError("Invalid map type: {}".format(args.map_type))
         exit(1)

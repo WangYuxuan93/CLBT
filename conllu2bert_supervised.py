@@ -116,7 +116,7 @@ parser.add_argument("--map_input", default=False, action='store_true', help="App
 parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
 parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
 parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
-parser.add_argument("--map_type", type=str, default=None, help="mapping type(linear|non_linear|attention|self_attention)")
+parser.add_argument("--map_type", type=str, default=None, help="mapping type(linear|nonlinear|attention|self_attention)")
 parser.add_argument("--head_num", type=int, default=12, help="attention head number")
 args = parser.parse_args()
 
