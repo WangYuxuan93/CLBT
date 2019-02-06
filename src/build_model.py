@@ -100,7 +100,7 @@ def build_model(args, with_dis):
         mapping = None
     elif args.map_type == 'linear':
         assert args.emb_dim == bert_config.hidden_size
-        logger.info("Linear mapping:\nEmbedding Dimension:{}".format(ags.emb_dim))
+        logger.info("Linear mapping:\nEmbedding Dimension:{}".format(args.emb_dim))
         mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
         if getattr(args, 'map_id_init', True):
             mapping.weight.data.copy_(torch.diag(torch.ones(args.emb_dim)))

@@ -18,11 +18,11 @@ class LinearSelfAttentionMap(nn.Module):
         self.emb_dim = args.emb_dim
 
         logger.info("Linear + SelfAttention Mapping")
-        logger.info("Linear mapping:\nEmbedding Dimension:{}".format(ags.emb_dim))
-        linear_map = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
+        logger.info("Linear mapping:\nEmbedding Dimension:{}".format(args.emb_dim))
+        self.linear_map = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
         if getattr(args, 'map_id_init', True):
-            mapping.weight.data.copy_(torch.diag(torch.ones(args.emb_dim)))
-        self_map = SelfAttentionMap(args)
+            self.linear_map.weight.data.copy_(torch.diag(torch.ones(args.emb_dim)))
+        self.self_map = SelfAttentionMap(args)
 
     def forward(self, input_tensor, attention_mask=None):
         """

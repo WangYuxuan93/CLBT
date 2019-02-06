@@ -18,8 +18,8 @@ class NonLinearSelfAttentionMap(nn.Module):
         self.emb_dim = args.emb_dim
 
         logger.info("NonLinear + SelfAttention Mapping")
-        nonlinear_map = NonLinearMap(args)
-        self_map = SelfAttentionMap(args)
+        self.nonlinear_map = NonLinearMap(args)
+        self.self_map = SelfAttentionMap(args)
 
     def forward(self, input_tensor, attention_mask=None):
         """
@@ -28,5 +28,5 @@ class NonLinearSelfAttentionMap(nn.Module):
         """
 
         nonlinear_output = self.nonlinear_map(input_tensor)
-        self_output = self.self_map(linear_output, attention_mask)
+        self_output = self.self_map(nonlinear_output, attention_mask)
         return self_output
