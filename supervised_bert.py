@@ -94,13 +94,15 @@ def main():
     # For supervised learning
     parser.add_argument("--adversarial", default=False, action='store_true', help="Adversarial training?")
     parser.add_argument("--align_file", default=None, type=str, help="The alignment file of paralleled sentences")
+    parser.add_argument("--map_type", type=str, default='linear', help="linear|non_linear|self_attention|attention|fine_tune")
+    parser.add_argument("--emb_dim", type=int, default=768, help="BERT embedding dimension")
     # For non-linear mapping
-    parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
+    #parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
     parser.add_argument("--activation", type=str, default='leaky_relu', help="learky_relu,tanh")
     parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
     parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
     # For attention-based mapping
-    parser.add_argument("--transformer", type=str, default=None, help="self_attention|attention")
+    #parser.add_argument("--transformer", type=str, default=None, help="self_attention|attention")
     parser.add_argument("--num_attention_heads", type=int, default=12, help="attention head number")
     parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1, help="attention probability dropout rate")
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1, help="attention hidden layer dropout rate")
@@ -109,7 +111,7 @@ def main():
     parser.add_argument("--bert_file1", default=None, type=str, help="Input predicted BERT file for language 1")
     parser.add_argument("--n_max_sent", type=int, default=None, help="Maximum BERT sentence number")
     # Fine-tuning
-    parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
+    #parser.add_argument("--fine_tune", action='store_true', default=False, help="Fine tune on src BERT model")
     parser.add_argument("--save_sim", type=bool_flag, default=True, help="Save model by cosine similarity?")
     # parse parameters
     args = parser.parse_args()
@@ -130,10 +132,9 @@ class Args(object):
     def __init__(self, model_path, vocab_file, bert_config_file, init_checkpoint, 
                 output_file, max_seq_length=128, bert_layer=-1, map_input=False,
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
-                non_linear=False, activation="leaky_relu", n_layers=2, hidden_size=768,
-                emb_dim=768, transformer=None, num_attention_heads=12, 
-                attention_probs_dropout_prob=0, hidden_dropout_prob=0,
-                fine_tune=False):
+                map_type='linear', activation="leaky_relu", n_layers=2, hidden_size=768,
+                emb_dim=768, num_attention_heads=12, attention_probs_dropout_prob=0, 
+                hidden_dropout_prob=0):
 
         self.adversarial = False
         self.pred = True
@@ -144,7 +145,8 @@ class Args(object):
         self.batch_size = 32
         self.do_lower_case = True
         self.map_input = map_input
-        self.fine_tune = fine_tune
+        self.map_type = map_type
+        #self.fine_tune = fine_tune
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file
@@ -158,13 +160,13 @@ class Args(object):
         self.bert_config_file1 = bert_config_file1
         self.init_checkpoint1 = init_checkpoint1
 
-        self.non_linear = non_linear
+        #self.non_linear = non_linear
         self.activation = activation
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.emb_dim = emb_dim
 
-        self.transformer = transformer
+        #self.transformer = transformer
         self.num_attention_heads = num_attention_heads
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.hidden_dropout_prob = hidden_dropout_prob
@@ -339,9 +341,9 @@ class SupervisedBert(object):
                     all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
                                                 attention_mask=input_mask)
                     src_encoder_layer = all_encoder_layers[self.args.bert_layer]
-                    if self.args.transformer:
+                    if self.args.map_type in self.transformer_types:
                         target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
-                    elif self.args.fine_tune:
+                    elif self.args.map_type == 'fine_tune':
                         target_layer = src_encoder_layer
                     else:
                         target_layer = self.trainer.mapping(src_encoder_layer)

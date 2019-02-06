@@ -21,10 +21,12 @@ logger = getLogger()
 
 class SupervisedBertTrainer(object):
 
-    def __init__(self, bert_model, mapping, discriminator, args, bert_model1=None):
+    def __init__(self, bert_model, mapping, discriminator, args, bert_model1=None,
+                trans_types=['self_attention','attention']):
         """
         Initialize trainer script.
         """
+        self.transformer_types = trans_types
         self.args = args
         self.bert_model = bert_model
         self.bert_model1 = bert_model1
@@ -39,7 +41,7 @@ class SupervisedBertTrainer(object):
         # optimizers
         if hasattr(args, 'map_optimizer'):
             optim_fn, optim_args = get_optimizer(args.map_optimizer)
-            if self.args.fine_tune:
+            if self.args.map_type == 'fine_tune':
                 self.map_optimizer = optim_fn(bert_model.parameters(), **optim_args)
             else:
                 self.map_optimizer = optim_fn(mapping.parameters(), **optim_args)
@@ -179,13 +181,13 @@ class SupervisedBertTrainer(object):
         """
         Get bert according to index and align_mask
         """
-        if self.args.fine_tune:
+        if self.args.map_type == 'fine_tune':
             unmasked_bert = self.get_trainable_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
         else:
             unmasked_bert = self.get_unmasked_bert(input_ids, input_mask, bert_layer, model_id)
-        if self.args.transformer:
+        if self.args.map_type in self.transformer_types:
             mapped_bert = self.mapping(unmasked_bert, input_mask)
-        elif self.args.fine_tune:
+        elif self.args.map_type == 'fine_tune':
             mapped_bert = unmasked_bert
         else:
             mapped_bert = self.mapping(unmasked_bert)
@@ -198,9 +200,9 @@ class SupervisedBertTrainer(object):
         """
         Get bert according to index and align_mask
         """
-        if self.args.transformer:
+        if self.args.map_type in self.transformer_types:
             mapped_bert = self.mapping(unmasked_bert, input_mask)
-        elif self.args.fine_tune:
+        elif self.args.map_type == 'fine_tune':
             mapped_bert = unmasked_bert
         else:
             mapped_bert = self.mapping(unmasked_bert)
@@ -250,7 +252,6 @@ class SupervisedBertTrainer(object):
             path = os.path.join(self.args.model_path, 'best_mapping.pkl')
             self.save_model(path)
 
-
     def save_model(self, path):
         """
         Save model to path.
@@ -258,7 +259,7 @@ class SupervisedBertTrainer(object):
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
 
-        if self.args.fine_tune:
+        if self.args.map_type == 'fine_tune':
             logger.info('* Saving the src BERT model to %s ...' % path)
             if isinstance(self.bert_model, torch.nn.DataParallel):
                 torch.save(self.bert_model.module.state_dict(), path)

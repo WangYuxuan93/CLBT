@@ -79,27 +79,25 @@ def build_model(args, with_dis):
             assert bert_config.hidden_size == bert_config1.hidden_size
 
     # mapping
-    if args.non_linear:
-        args.emb_dim = bert_config.hidden_size
+    #if args.non_linear:
+    if args.map_type == 'non_linear':
+        assert args.emb_dim == bert_config.hidden_size
         mapping = NonLinearMap(args)
-    elif args.transformer:
-        if args.transformer not in transformer_types:
-            raise ValueError("{} not in transformer types {}".format(args.transformer, '|'.join(transformer_types)))
-            exit(1)
-        if args.transformer == 'self_attention':
-            mapping = SelfAttentionMap(args)
-        elif args.transformer == 'attention':
-            mapping = AttentionMap(args)
-    elif args.fine_tune:
+    #elif args.transformer:
+    elif args.map_type == 'self_attention':
+        mapping = SelfAttentionMap(args)
+    elif args.map_type == 'attention':
+        mapping = AttentionMap(args)
+    elif args.map_type == 'fine_tune':
         mapping = None
-    elif not args.bert_config_file1:
-        mapping = nn.Linear(bert_config.hidden_size, bert_config.hidden_size, bias=False)
+    elif args.map_type == 'linear':
+        assert args.emb_dim == bert_config.hidden_size
+        mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
         if getattr(args, 'map_id_init', True):
             mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
     else:
-        mapping = nn.Linear(bert_config.hidden_size, bert_config1.hidden_size, bias=False)
-        if getattr(args, 'map_id_init', True):
-            mapping.weight.data.copy_(torch.diag(torch.ones(bert_config.hidden_size)))
+        raise ValueError("Invalid map type: {}".format(args.map_type))
+        exit(1)
     if mapping:
         mapping.to(device)
 
