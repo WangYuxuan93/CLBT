@@ -45,7 +45,7 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   sup_bert = SupervisedBert(flags)
   sup_bert.list2bert(sents)
   
-def merge(bert_file, merge_file, sents):
+def merge(bert_file, merge_file, sents, merge_type='sum'):
   n = 0
   n_unk = 0
   n_tok = 0
@@ -58,17 +58,42 @@ def merge(bert_file, merge_file, sents):
       bert = json.loads(line)
       tokens = []
       merged = {"linex_index": bert["linex_index"], "features":[]}
-      for i, item in enumerate(bert["features"]):
+      i = 0
+      while i < len(bert["features"]):
+        item = bert["features"][i]
         if item["token"]=="[CLS]" or item["token"]=="[SEP]":
           merged["features"].append(item)
-          continue
-        if item["token"].startswith("##") and not (len(merged["features"])-1<len(sents[n]) and item["token"] == sents[n][len(merged["features"])-1]):
+        elif item["token"].startswith("##") and not (len(merged["features"])-1<len(sents[n]) and item["token"] == sents[n][len(merged["features"])-1]):
+          tmp_layers = []
           for j, layer in enumerate(merged["features"][-1]["layers"]):
-            merged["features"][-1]["layers"][j]["values"] = list(np.array(layer["values"]) + np.array(item["layers"][j]["values"]))
-            if len(sents[n]) < len(merged["features"]) - 1:
-              print (sents[n], len(merged["features"]))
-            else:
-              merged["features"][-1]["token"] = sents[n][len(merged["features"])-2].lower()
+            #merged["features"][-1]["layers"][j]["values"] = list(np.array(layer["values"]) + np.array(item["layers"][j]["values"]))
+            # j-th layer
+            tmp_layers.append([np.array(layer["values"])])
+            tmp_layers[j].append(np.array(item["layers"][j]["values"]))
+
+          item = bert["features"][i+1]
+          while item["token"].startswith("##") and not (len(merged["features"])-1<len(sents[n]) and item["token"] == sents[n][len(merged["features"])-1]):
+            for j, layer in enumerate(merged["features"][-1]["layers"]):
+              # j-th layer
+              tmp_layers[j].append(np.array(item["layers"][j]["values"]))
+            i += 1
+            item = bert["features"][i+1]
+          for j, layer in enumerate(merged["features"][-1]["layers"]):
+            if merge_type == 'sum':
+              merged["features"][-1]["layers"][j]["values"] = list(np.sum(tmp_layers[j], 0))
+            if merge_type == 'avg':
+              merged["features"][-1]["layers"][j]["values"] = list(np.mean(tmp_layers[j], 0))
+            if merge_type == 'first':
+              merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][0])
+            if merge_type == 'last':
+              merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][-1])
+            if merge_type == 'mid':
+              mid = int(len(tmp_layers[j]) / 2)
+              merged["features"][-1]["layers"][j]["values"] = list(tmp_layers[j][mid])
+          if len(sents[n]) < len(merged["features"]) - 1:
+            print (sents[n], len(merged["features"]))
+          else:
+            merged["features"][-1]["token"] = sents[n][len(merged["features"])-2].lower()
         elif item["token"] == "[UNK]":
           n_unk += 1
           merged["features"].append(item)
@@ -78,6 +103,7 @@ def merge(bert_file, merge_file, sents):
             merged["features"][-1]["token"] = sents[n][len(merged["features"])-2].lower()
         else:
           merged["features"].append(item)
+        i += 1
       try:
         assert len(merged["features"]) == len(sents[n]) + 2
       except:
@@ -91,6 +117,7 @@ def merge(bert_file, merge_file, sents):
           assert sents[n][i].lower() == merged["features"][i+1]["token"]
         except:
           print ('wrong word id:{}, word:{}'.format(i, sents[n][i]))
+
       n_tok += len(sents[n])
       fo.write(json.dumps(merged)+"\n")
       line = fin.readline()
@@ -118,6 +145,7 @@ parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
 parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
 parser.add_argument("--map_type", type=str, default=None, help="mapping type(linear|nonlinear|attention|self_attention)")
 parser.add_argument("--head_num", type=int, default=12, help="attention head number")
+parser.add_argument("--merge_type", type=str, default=None, help="merge type (sum|avg|first|last|mid)")
 args = parser.parse_args()
 
 map_model = args.mapping
