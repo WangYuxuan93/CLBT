@@ -46,6 +46,7 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   sup_bert.list2bert(sents)
   
 def merge(bert_file, merge_file, sents, merge_type='sum'):
+  merge_file = merge_file+'.'+merge_type
   n = 0
   n_unk = 0
   n_tok = 0
@@ -164,4 +165,7 @@ print ("Total {} Sentences".format(len(sents)))
 list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input,
             map_type=args.map_type, activation=args.activation, n_layers=args.n_layers,
             hidden_size=args.hidden_size, num_attention_heads=args.head_num)
-merge(bert_file, merge_file, sents, merge_type=args.merge_type)
+
+merge_types = args.merge_type.split(',')
+for merge_type in merge_types:
+  merge(bert_file, merge_file, sents, merge_type=merge_type)
