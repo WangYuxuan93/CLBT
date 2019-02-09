@@ -205,7 +205,14 @@ class SupervisedBertTrainer(object):
         elif self.args.map_type == 'fine_tune':
             mapped_bert = unmasked_bert
         else:
+            if str(self.device) == 'cpu':
+              print ("Transfering to gpu")
+              unmasked_bert = unmasked_bert.cuda()
+              self.mapping = self.mapping.cuda()
             mapped_bert = self.mapping(unmasked_bert)
+            if str(self.device) == 'cpu':
+              print ("Trnasfering back to cpu")
+              mapped_bert = mapped_bert.cpu()
         rearanged_bert = self.rearange(mapped_bert, index)
         indexed_bert = self.select(rearanged_bert, align_mask)
         #print (unmasked_bert, '\n', mapped_bert, '\n', rearanged_bert, '\n', indexed_bert)

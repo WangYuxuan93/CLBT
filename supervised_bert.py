@@ -354,6 +354,8 @@ class SupervisedBert(object):
             self.logger.info("Before mapping: avg cos sim:{:.6f}, avg l2 distance:{:.6f}".format(avg_cos_sim_0, loss_0))
             
             self.trainer.procrustes(src_bert, tgt_bert)
+            self.trainer.save_model(self.args.model_path+'/best_mapping.pkl')
+
             mapped_src_bert = self.trainer.get_indexed_mapped_bert_from_bert(
                                     input_embs_a, input_mask_a, align_ids_a, align_mask, 
                                     bert_layer=self.args.bert_layer)
@@ -361,7 +363,7 @@ class SupervisedBert(object):
             avg_cos_sim_1 = avg_cos_sim.cpu().detach().numpy()
             loss_1 = loss.cpu().detach().numpy()
             self.logger.info("After mapping: avg cos sim:{:.6f}, avg l2 distance:{:.6f}".format(avg_cos_sim_1, loss_1))
-        self.trainer.save_model(self.args.model_path+'/best_mapping.pkl')
+        
 
     def list2bert(self, sents):
         """
