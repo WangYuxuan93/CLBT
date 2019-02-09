@@ -142,6 +142,7 @@ class Args(object):
         self.map_input = map_input
         self.transformer = None
         self.fine_tune = False
+        self.load_pred_bert = False
 
         self.vocab_file = vocab_file
         self.bert_config_file = bert_config_file
