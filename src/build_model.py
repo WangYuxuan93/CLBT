@@ -98,7 +98,7 @@ def build_model(args, with_dis):
         mapping = NonLinearSelfAttentionMap(args)
     elif args.map_type == 'fine_tune':
         mapping = None
-    elif args.map_type == 'linear':
+    elif args.map_type == 'linear' or args.map_type == 'svd':
         assert args.emb_dim == bert_config.hidden_size
         logger.info("Linear mapping:\nEmbedding Dimension:{}".format(args.emb_dim))
         mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
