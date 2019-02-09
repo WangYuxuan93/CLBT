@@ -94,7 +94,7 @@ def main():
     # For supervised learning
     parser.add_argument("--adversarial", default=False, action='store_true', help="Adversarial training?")
     parser.add_argument("--align_file", default=None, type=str, help="The alignment file of paralleled sentences")
-    parser.add_argument("--map_type", type=str, default='linear', help="linear|nonlinear|self_attention|attention|linear_self_attention|nonlinear_self_attention|fine_tune")
+    parser.add_argument("--map_type", type=str, default='linear', help="svd|linear|nonlinear|self_attention|attention|linear_self_attention|nonlinear_self_attention|fine_tune")
     parser.add_argument("--emb_dim", type=int, default=768, help="BERT embedding dimension")
     # For non-linear mapping
     #parser.add_argument("--non_linear", action='store_true', default=False, help="Use non-linear mapping")
@@ -118,8 +118,11 @@ def main():
 
     bert_super = SupervisedBert(args)
 
-    if not args.pred:
+    if not (args.pred or args.map_type=='svd'):
         bert_super.train()
+
+    if args.map_type=='svd':
+        bert_super.svd()
 
     if args.pred:
         bert_super.pred()
@@ -245,10 +248,10 @@ class SupervisedBert(object):
                     #print (align_ids_a, align_ids_b, align_mask)
                     src_bert = self.trainer.get_indexed_mapped_bert_from_bert(
                                     input_embs_a, input_mask_a, align_ids_a, align_mask, 
-                                    bert_layer=self.args.bert_layer, model_id=0)
+                                    bert_layer=self.args.bert_layer)
                     tgt_bert = self.trainer.get_indexed_bert_from_bert(
                                     input_embs_b, align_ids_b, align_mask,
-                                    bert_layer=self.args.bert_layer, model_id=1)
+                                    bert_layer=self.args.bert_layer)
 
                     avg_cos_sim, loss = self.trainer.supervised_mapping_step(src_bert, tgt_bert)
                     n_inst += src_bert.size()[0]
@@ -310,6 +313,55 @@ class SupervisedBert(object):
             if n_without_improvement >= self.args.quit_after_n_epochs_without_improvement:
                 self.logger.info('After {} epochs without improvement, quiting!'.format(n_without_improvement))
                 break
+
+    def svd(self):
+        """
+        """
+        if self.args.load_pred_bert:
+            assert self.args.bert_file0 is not None
+            assert self.args.bert_file1 is not None
+            self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
+                self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
+                max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
+                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
+
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+                                    self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
+
+        sampler = SequentialSampler(self.dataset)
+        train_loader = DataLoader(self.dataset, sampler=sampler, batch_size=len(self.dataset))
+
+        self.trainer.args.loss = 'l2_dist'
+        for input_embs_a, input_mask_a, input_embs_b, input_mask_b, align_ids_a, align_ids_b, align_mask, example_indices in train_loader:
+            self.logger.info("Applying SVD")
+            with torch.no_grad():
+                input_embs_a = input_embs_a.to(self.device)
+                input_mask_a = input_mask_a.to(self.device)
+                input_embs_b = input_embs_b.to(self.device)
+            align_ids_a = align_ids_a.to(self.device)
+            align_ids_b = align_ids_b.to(self.device)
+            align_mask = align_mask.to(self.device)
+            #print (align_ids_a, align_ids_b, align_mask)
+            src_bert = self.trainer.get_indexed_bert_from_bert(
+                            input_embs_a, align_ids_a, align_mask, 
+                            bert_layer=self.args.bert_layer)
+            tgt_bert = self.trainer.get_indexed_bert_from_bert(
+                            input_embs_b, align_ids_b, align_mask,
+                            bert_layer=self.args.bert_layer)
+            avg_cos_sim, loss = self.trainer.supervised_mapping_step(src_bert, tgt_bert, eval_only=True)
+            avg_cos_sim_0 = avg_cos_sim.cpu().detach().numpy()
+            loss_0 = loss.cpu().detach().numpy()
+            self.logger.info("Before mapping: avg cos sim:{:.6f}, avg l2 distance:{:.6f}".format(avg_cos_sim_0, loss_0))
+            
+            self.trainer.procrustes(src_bert, tgt_bert)
+            mapped_src_bert = self.trainer.get_indexed_mapped_bert_from_bert(
+                                    input_embs_a, input_mask_a, align_ids_a, align_mask, 
+                                    bert_layer=self.args.bert_layer)
+            avg_cos_sim, loss = self.trainer.supervised_mapping_step(mapped_src_bert, tgt_bert, eval_only=True)
+            avg_cos_sim_1 = avg_cos_sim.cpu().detach().numpy()
+            loss_1 = loss.cpu().detach().numpy()
+            self.logger.info("After mapping: avg cos sim:{:.6f}, avg l2 distance:{:.6f}".format(avg_cos_sim_1, loss_1))
+        self.trainer.save_model(self.args.model_path+'/best_mapping.pkl')
 
     def list2bert(self, sents):
         """

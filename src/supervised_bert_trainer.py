@@ -50,7 +50,7 @@ class SupervisedBertTrainer(object):
         self.best_valid_metric = -1e12
         self.decrease_lr = False
 
-    def supervised_mapping_step(self, src_emb, tgt_emb, margin=1):
+    def supervised_mapping_step(self, src_emb, tgt_emb, margin=1, eval_only=False):
         """
         Calculate the loss and backward
         Inputs:
@@ -111,8 +111,8 @@ class SupervisedBertTrainer(object):
         # (n)
         avg_cos_sim = (src_emb * tgt_emb).sum(1).mean()
 
-        #if self.args.test:
-        #    return avg_cos_sim, loss
+        if eval_only:
+            return avg_cos_sim, loss
         # optim
         self.map_optimizer.zero_grad()
         loss.backward()
@@ -196,7 +196,7 @@ class SupervisedBertTrainer(object):
         #print (unmasked_bert, '\n', mapped_bert, '\n', rearanged_bert, '\n', indexed_bert)
         return indexed_bert
 
-    def get_indexed_mapped_bert_from_bert(self, unmasked_bert, input_mask, index, align_mask, bert_layer=-1, model_id=0):
+    def get_indexed_mapped_bert_from_bert(self, unmasked_bert, input_mask, index, align_mask, bert_layer=-1):
         """
         Get bert according to index and align_mask
         """
@@ -220,13 +220,31 @@ class SupervisedBertTrainer(object):
         indexed_bert = self.select(rearanged_bert, align_mask)
         return indexed_bert
 
-    def get_indexed_bert_from_bert(self, unmasked_bert, index, align_mask, bert_layer=-1, model_id=1):
+    def get_indexed_bert_from_bert(self, unmasked_bert, index, align_mask, bert_layer=-1):
         """
         Get bert according to index and align_mask
         """
         rearanged_bert = self.rearange(unmasked_bert, index)
         indexed_bert = self.select(rearanged_bert, align_mask)
         return indexed_bert
+
+    def procrustes(self, src_embs, tgt_embs):
+        """
+        Find the best orthogonal matrix mapping using the Orthogonal Procrustes problem
+        https://en.wikipedia.org/wiki/Orthogonal_Procrustes_problem
+        Input:
+            src_embs/tgt_embs: [vocab_size, emb_dim]
+        """
+        A = src_embs
+        B = tgt_embs
+        if isinstance(self.mapping, torch.nn.DataParallel):
+            W = self.mapping.module.weight.data
+        else:
+            W = self.mapping.weight.data
+        M = B.transpose(0, 1).mm(A).cpu().numpy()
+        U, S, V_t = scipy.linalg.svd(M, full_matrices=True)
+        W.copy_(torch.from_numpy(U.dot(V_t)).type_as(W))
+        logger.info("Finished Procrustes.")
 
     def decay_map_lr(self):
         """
