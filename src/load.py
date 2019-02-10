@@ -496,6 +496,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
         line = fi.readline()
         while line:
             pairs = [pair.split('-') for pair in line.strip().split()]
+            align = []
             if policy == '1to1':
                 # remove the one-to-many and many-to-one cases
                 left = collections.Counter([pair[0] for pair in pairs])
@@ -508,12 +509,46 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
                 for r in right:
                     if right[r] > 1:
                         rm_right.append(r)
-                align = []
                 for pair in pairs:
                     if pair[0] not in rm_left and pair[1] not in rm_right:
                         align.append(pair)
                 n_1to1 += len(align)
-                if align_punc:
+            elif policy in ['first', 'last', 'mid']:
+                a2b = {}
+                b2a = {}
+                for pair in pairs:
+                    if int(pair[0]) not in a2b:
+                        a2b[int(pair[0])] = [int(pair[1])]
+                    else:
+                        a2b[int(pair[0])].append(int(pair[1]))
+                for a in a2b:
+                    a2b[a].sort()
+                    # rm 1-to-many situation
+                    if policy == 'first':
+                        a2b[a] = a2b[a][0]
+                    elif policy == 'last':
+                        a2b[a] = a2b[a][-1]
+                    elif policy == 'mid':
+                        mid = int(len(a2b[a])/2)
+                        a2b[a] = a2b[a][mid]
+                    if a2b[a] not in b2a:
+                        b2a[a2b[a]] = [a]
+                    else:
+                        b2a[a2b[a]].append(a)
+                for b in b2a:
+                    # rm many-to-1 situation
+                    if policy == 'first':
+                        b2a[b] = b2a[b][0]
+                    elif policy == 'last':
+                        b2a[b] = b2a[b][-1]
+                    elif policy == 'mid':
+                        mid = int(len(b2a[b])/2)
+                        b2a[b] = b2a[b][mid]
+                    align.append([b2a[b], b])
+            else:
+                raise ValueError("Undefined alignment policy: {}".format(policy))
+                
+            if align_punc:
                     align_ = []
                     toks_a = examples[len(aligns)].toks_a
                     toks_b = examples[len(aligns)].toks_b
@@ -538,16 +573,6 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
             aligns.append((src_ids, tgt_ids))
             if n_max_sent and len(aligns) >= n_max_sent:
                 break
-            """
-            map, rev_map = {}, {}
-            for pair in align:
-                src, tgt = [int(n) for n in pair]
-                map[src] = tgt
-            for key in map:
-                rev_map[map[key]] = key
-            maps.append(map)
-            rev_maps.append(rev_map)
-            """
             line = fi.readline()
         logger.info("1-to-1 alignments: {}".format(n_1to1))
         if align_punc:
