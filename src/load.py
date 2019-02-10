@@ -25,6 +25,7 @@ import logging
 import json
 import re
 import numpy as np
+import string
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
@@ -484,29 +485,47 @@ def load_bert(input_file_a, input_file_b, n_max_sent=None):
 
     return examples
 
-def load_aligns(file, n_max_sent=None):
+def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='1to1'):
     """Load the word-level alignment, only one-to-one word pairs are kept"""
     #maps, rev_maps = [], []
+    puncs = string.punctuation
     aligns = []
+    n_1to1 = 0
+    n_alg_punc = 0
     with open(file, 'r') as fi:
         line = fi.readline()
         while line:
             pairs = [pair.split('-') for pair in line.strip().split()]
-            # remove the one-to-many and many-to-one cases
-            left = collections.Counter([pair[0] for pair in pairs])
-            right = collections.Counter([pair[1] for pair in pairs])
-            rm_left = []
-            rm_right = []
-            for l in left:
-                if left[l] > 1:
-                    rm_left.append(l)
-            for r in right:
-                if right[r] > 1:
-                    rm_right.append(r)
-            align = []
-            for pair in pairs:
-                if pair[0] not in rm_left and pair[1] not in rm_right:
-                    align.append(pair)
+            if policy == '1to1':
+                # remove the one-to-many and many-to-one cases
+                left = collections.Counter([pair[0] for pair in pairs])
+                right = collections.Counter([pair[1] for pair in pairs])
+                rm_left = []
+                rm_right = []
+                for l in left:
+                    if left[l] > 1:
+                        rm_left.append(l)
+                for r in right:
+                    if right[r] > 1:
+                        rm_right.append(r)
+                align = []
+                for pair in pairs:
+                    if pair[0] not in rm_left and pair[1] not in rm_right:
+                        align.append(pair)
+                n_1to1 += len(align)
+                if align_punc:
+                    align_ = []
+                    toks_a = examples[len(aligns)].toks_a
+                    toks_b = examples[len(aligns)].toks_b
+                    for pair in align:
+                        if (toks_a[int(pair[0])+1] in punc and toks_b[int(pair[1])+1] not in puncs) or (
+                            toks_a[int(pair[0])+1] not in punc and toks_b[int(pair[1])+1] in puncs):
+                            continue
+                        else:
+                            align_.append(pair)
+                    align = align_
+                    n_alg_punc += len(align)
+
             src_ids, tgt_ids = [], []
             for pair in align:
                 src, tgt = [int(n) for n in pair]
@@ -529,6 +548,9 @@ def load_aligns(file, n_max_sent=None):
             rev_maps.append(rev_map)
             """
             line = fi.readline()
+        logger.info("1-to-1 alignments: {}".format(n_1to1))
+        if align_punc:
+            logger.info("After align puncs: {}".format(n_alg_punc))
     return aligns
 
 def load(vocab_file, input_file, batch_size=32, do_lower_case=True, 
@@ -584,7 +606,8 @@ def load(vocab_file, input_file, batch_size=32, do_lower_case=True,
     return dataset, unique_id_to_feature, features
 
 def load_from_bert(vocab_file, input_file_a, input_file_b, do_lower_case=True, 
-            max_seq_length=128, vocab_file1=None, align_file=None, n_max_sent=None):
+            max_seq_length=128, vocab_file1=None, align_file=None, n_max_sent=None,
+            align_punc=False, policy='1to1'):
 
     tokenizer = tokenization.FullTokenizer(
         vocab_file=vocab_file, do_lower_case=do_lower_case)
@@ -595,7 +618,8 @@ def load_from_bert(vocab_file, input_file_a, input_file_b, do_lower_case=True,
 
     aligns = None
     if align_file:
-        aligns = load_aligns(align_file, n_max_sent=n_max_sent)
+        aligns = load_aligns(align_file, n_max_sent=n_max_sent, examples=examples, 
+                            align_punc=align_punc, policy=policy)
         try:
             assert len(examples) == len(aligns)
         except:

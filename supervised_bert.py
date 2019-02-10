@@ -112,6 +112,8 @@ def main():
     parser.add_argument("--save_sim", type=bool_flag, default=True, help="Save model by cosine similarity?")
     # Eval
     parser.add_argument("--eval", default=False, action='store_true', help="Load model and eval?")
+    parser.add_argument("--align_punc", default=False, action='store_true', help="Align punctuation?")
+    parser.add_argument("--align_policy", default='1to1', type=str, help="Alignment policy")
     # parse parameters
     args = parser.parse_args()
 
@@ -203,7 +205,8 @@ class SupervisedBert(object):
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
-                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
+                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file,
+                align_punc=self.args.align_punc, policy=self.args.align_policy)
         else:
             self.dataset, unique_id_to_feature, self.features = load(self.args.vocab_file, self.args.input_file,
                 batch_size=self.args.batch_size, do_lower_case=self.args.do_lower_case, 
