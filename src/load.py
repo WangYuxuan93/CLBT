@@ -573,7 +573,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
             if n_max_sent and len(aligns) >= n_max_sent:
                 break
             line = fi.readline()
-        logger.info("Before align puncs: {} (policy: {})".format(n_alg), policy)
+        logger.info("Before align puncs: {} (policy: {})".format(n_alg, policy))
         if align_punc:
             logger.info("After align puncs: {}".format(n_alg_punc))
     return aligns
