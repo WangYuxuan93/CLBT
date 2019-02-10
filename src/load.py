@@ -490,7 +490,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
     #maps, rev_maps = [], []
     puncs = string.punctuation
     aligns = []
-    n_1to1 = 0
+    n_alg = 0
     n_alg_punc = 0
     with open(file, 'r') as fi:
         line = fi.readline()
@@ -511,8 +511,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
                         rm_right.append(r)
                 for pair in pairs:
                     if pair[0] not in rm_left and pair[1] not in rm_right:
-                        align.append(pair)
-                n_1to1 += len(align)
+                        align.append(pair) 
             elif policy in ['first', 'last', 'mid']:
                 a2b = {}
                 b2a = {}
@@ -547,7 +546,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
                     align.append([b2a[b], b])
             else:
                 raise ValueError("Undefined alignment policy: {}".format(policy))
-                
+            n_alg += len(align)
             if align_punc:
                     align_ = []
                     toks_a = examples[len(aligns)].toks_a
@@ -574,7 +573,7 @@ def load_aligns(file, examples=None, n_max_sent=None, align_punc=False, policy='
             if n_max_sent and len(aligns) >= n_max_sent:
                 break
             line = fi.readline()
-        logger.info("1-to-1 alignments: {}".format(n_1to1))
+        logger.info("Before align puncs: {} (policy: {})".format(n_alg), policy)
         if align_punc:
             logger.info("After align puncs: {}".format(n_alg_punc))
     return aligns
