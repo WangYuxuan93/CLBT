@@ -879,14 +879,12 @@ def convert_bert_examples_to_features_single(examples, seq_length, sents):
 
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
-        input_mask = [1] * len(input_ids)
+        input_mask = [1] * len(input_embs)
 
         # Zero-pad up to the sequence length.
-        while len(input_ids) < seq_length:
-            input_ids.append(0)
+        while len(input_mask) < seq_length:
             input_mask.append(0)
             input_embs.append(emb_pad)
-        assert len(input_ids) == seq_length
         assert len(input_mask) == seq_length
         assert len(input_embs) == seq_length
 
@@ -896,7 +894,6 @@ def convert_bert_examples_to_features_single(examples, seq_length, sents):
             logger.info("*** Example ***")
             logger.info("unique_id: %s" % (example.unique_id))
             logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
-            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
             logger.info("input_emb {}: \n{}".format(input_embs.shape, input_embs))
 
@@ -921,7 +918,7 @@ def load_from_single_bert(bert_file, sents, max_seq_length=128):
 
     all_input_embs = torch.tensor([f.input_embs for f in features], dtype=torch.float)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
+    all_example_index = torch.arange(all_input_mask.size(0), dtype=torch.long)
 
     dataset = TensorDataset(all_input_embs, all_input_mask, all_example_index)
 

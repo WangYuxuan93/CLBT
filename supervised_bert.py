@@ -15,7 +15,7 @@ import torch
 import string
 
 from src.utils import bool_flag, initialize_exp
-from src.load import load, load_single, convert, load_from_bert
+from src.load import load, load_single, convert, load_from_bert, load_from_single_bert
 from src.build_model import build_model
 from src.supervised_bert_trainer import SupervisedBertTrainer
 from src.bert_evaluator import BertEvaluator
@@ -431,20 +431,17 @@ class SupervisedBert(object):
 
         if self.args.load_pred_bert:
             assert self.args.bert_file0 is not None
-            pred_dataset, unique_id_to_feature, features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
-                self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
-                max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
-                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file,
-                align_punc=self.args.align_punc, policy=self.args.align_policy)
+            pred_dataset, unique_id_to_feature, features = load_from_single_bert(self.args.bert_file0, sents, max_seq_length=self.args.max_seq_length)
         else:
             pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
                         sents, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
                         max_seq_length=self.args.max_seq_length, 
                         local_rank=self.args.local_rank)
+            self.bert_model.eval()
         pred_sampler = SequentialSampler(pred_dataset)
         pred_dataloader = DataLoader(pred_dataset, sampler=pred_sampler, batch_size=self.args.batch_size)
-        self.bert_model.eval()
+ 
         self.trainer.mapping.eval()
         with open(self.args.output_file, "w", encoding='utf-8') as writer:
             if self.args.load_pred_bert:
