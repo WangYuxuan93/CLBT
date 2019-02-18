@@ -136,13 +136,12 @@ class Args(object):
                 vocab_file1=None, bert_config_file1=None, init_checkpoint1=None,
                 map_type='linear', activation="leaky_relu", n_layers=2, hidden_size=768,
                 emb_dim=768, num_attention_heads=12, attention_probs_dropout_prob=0, 
-                hidden_dropout_prob=0):
+                hidden_dropout_prob=0, load_pred_bert=False, bert_file0=None):
 
         self.adversarial = False
         self.pred = True
         self.no_cuda = False
         self.cal_sent_sim = False
-        self.load_pred_bert = False
         self.local_rank = -1
         self.batch_size = 32
         self.do_lower_case = True
@@ -172,6 +171,10 @@ class Args(object):
         self.num_attention_heads = num_attention_heads
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.hidden_dropout_prob = hidden_dropout_prob
+
+        #load_pred_bert
+        self.load_pred_bert = load_pred_bert
+        self.bert_file0 = bert_file0
 
 class SupervisedBert(object):
 
@@ -425,7 +428,16 @@ class SupervisedBert(object):
         self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
                                         self.args, trans_types=self.transformer_types)
         self.trainer.load_best()
-        pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
+
+        if self.args.load_pred_bert:
+            assert self.args.bert_file0 is not None
+            pred_dataset, unique_id_to_feature, features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
+                self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
+                max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
+                vocab_file1=self.args.vocab_file1, align_file=self.args.align_file,
+                align_punc=self.args.align_punc, policy=self.args.align_policy)
+        else:
+            pred_dataset, unique_id_to_feature, features = convert(self.args.vocab_file, 
                         sents, batch_size=self.args.batch_size, 
                         do_lower_case=self.args.do_lower_case, 
                         max_seq_length=self.args.max_seq_length, 
@@ -435,24 +447,37 @@ class SupervisedBert(object):
         self.bert_model.eval()
         self.trainer.mapping.eval()
         with open(self.args.output_file, "w", encoding='utf-8') as writer:
-            for input_ids, input_mask, example_indices in pred_dataloader:
-                input_ids = input_ids.to(self.device)
-                input_mask = input_mask.to(self.device)
+            if self.args.load_pred_bert:
+                for input_embs, input_mask, example_indices in pred_dataloader:
+                    input_embs = input_embs.to(self.device)
+                    input_mask = input_mask.to(self.device)
 
-                if self.args.map_input:
-                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, 
-                                                attention_mask=input_mask, input_mapping=self.trainer.mapping)
-                    target_layer = all_encoder_layers[self.args.bert_layer]
-                else:
-                    all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
-                                                attention_mask=input_mask)
-                    src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                    src_encoder_layer = input_embs
                     if self.args.map_type in self.transformer_types:
                         target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
                     elif self.args.map_type == 'fine_tune':
                         target_layer = src_encoder_layer
                     else:
                         target_layer = self.trainer.mapping(src_encoder_layer)
+            else:
+                for input_ids, input_mask, example_indices in pred_dataloader:
+                    input_ids = input_ids.to(self.device)
+                    input_mask = input_mask.to(self.device)
+
+                    if self.args.map_input:
+                        all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, 
+                                                    attention_mask=input_mask, input_mapping=self.trainer.mapping)
+                        target_layer = all_encoder_layers[self.args.bert_layer]
+                    else:
+                        all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None,
+                                                    attention_mask=input_mask)
+                        src_encoder_layer = all_encoder_layers[self.args.bert_layer]
+                        if self.args.map_type in self.transformer_types:
+                            target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
+                        elif self.args.map_type == 'fine_tune':
+                            target_layer = src_encoder_layer
+                        else:
+                            target_layer = self.trainer.mapping(src_encoder_layer)
 
                 for b, example_index in enumerate(example_indices):
                     feature = features[example_index.item()]

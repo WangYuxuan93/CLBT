@@ -57,6 +57,13 @@ class InputBertExample(object):
         self.embs_b = embs_b
         self.toks_b = toks_b
 
+class InputSingleBertExample(object):
+
+    def __init__(self, unique_id, embs, toks):
+        self.unique_id = unique_id
+        self.embs = embs
+        self.toks = toks
+
 class InputFeatures(object):
     """A single set of features of data."""
 
@@ -66,6 +73,16 @@ class InputFeatures(object):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.input_type_ids = input_type_ids
+
+class InputBertFeatures(object):
+    """A single set of features of data."""
+
+    def __init__(self, unique_id, tokens, input_ids, input_mask, input_embs, 
+                    align=[None,None], align_mask=None):
+        self.unique_id = unique_id
+        self.tokens = tokens
+        self.input_mask = input_mask
+        self.input_embs = input_embs
 
 class BiInputFeatures(object):
     """A single set of features of data."""
@@ -92,6 +109,15 @@ class BiInputBertFeatures(object):
         self.input_embs_a, self.input_embs_b = input_embs
         self.align_ids_a, self.align_ids_b = align
         self.align_mask = align_mask
+
+class InputBertFeatures(object):
+    """A single set of features of data."""
+
+    def __init__(self, unique_id, tokens, input_mask, input_embs):
+        self.unique_id = unique_id
+        self.tokens = tokens
+        self.input_mask = input_mask
+        self.input_embs = input_embs
 
 def check_token(vocab, tokens, unk_token="[UNK]"):
     new_tokens = []
@@ -809,6 +835,95 @@ def convert(vocab_file, sents, batch_size=32, do_lower_case=True,
     all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
 
     dataset = TensorDataset(all_input_ids, all_input_mask, all_example_index)
+
+    return dataset, unique_id_to_feature, features
+
+def load_single_bert(input_file, n_max_sent=None):
+    """Read a list of `InputExample`s from an input file."""
+    examples = []
+
+    with codecs.open(input_file, encoding='utf-8', errors='ignore') as f:
+        while True:
+            line = f.readline()
+            if not line:
+                break
+            # src bert
+            bert = json.loads(line)
+            unique_id = int(bert["linex_index"])
+            bert = bert["features"]
+            embs = [np.array(item["layers"][0]["values"]) for item in bert]
+            toks = [item["token"] for item in bert]
+            assert len(embs) == len(toks)
+
+            examples.append(
+              InputSingleBertExample(unique_id=unique_id, embs=embs, toks=toks))
+            if unique_id % 1000 == 0:
+                print ("\r%d" % unique_id, end="")
+            if n_max_sent is not None and unique_id >= n_max_sent-1:
+                break
+
+    return examples
+
+def convert_bert_examples_to_features_single(examples, seq_length, sents):
+    """Loads a data file into a list of `InputBatch`s."""
+
+    emb_pad = np.zeros(len(examples[0].embs[0]))
+    features = []
+    for (ex_index, example) in enumerate(examples):
+        if ex_index % 1000 == 0:
+            print ("\r%d" % ex_index, end="")
+        tokens = example.toks
+        assert len(tokens) <= seq_length
+
+        input_embs = example.embs
+
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask = [1] * len(input_ids)
+
+        # Zero-pad up to the sequence length.
+        while len(input_ids) < seq_length:
+            input_ids.append(0)
+            input_mask.append(0)
+            input_embs.append(emb_pad)
+        assert len(input_ids) == seq_length
+        assert len(input_mask) == seq_length
+        assert len(input_embs) == seq_length
+
+        input_embs = np.stack(input_embs, 0)
+
+        if ex_index < 2:
+            logger.info("*** Example ***")
+            logger.info("unique_id: %s" % (example.unique_id))
+            logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
+            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+            logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+            logger.info("input_emb {}: \n{}".format(input_embs.shape, input_embs))
+
+        features.append(
+            InputBertFeatures(
+                    unique_id=example.unique_id,
+                    tokens=tokens,
+                    input_mask=input_mask,
+                    input_embs=input_embs))
+    return features
+
+def load_from_single_bert(bert_file, sents, max_seq_length=128):
+
+    examples = load_single_bert(bert_file)
+    assert len(sents) == len(examples)
+    
+    features = convert_bert_examples_to_features_single(examples, max_seq_length, sents)
+
+    unique_id_to_feature = {}
+    for feature in features:
+        unique_id_to_feature[feature.unique_id] = feature
+
+    all_input_embs = torch.tensor([f.input_embs for f in features], dtype=torch.float)
+    all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
+    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
+
+    dataset = TensorDataset(all_input_embs, all_input_mask, all_example_index)
 
     return dataset, unique_id_to_feature, features
 

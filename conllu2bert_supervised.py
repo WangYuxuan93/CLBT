@@ -27,7 +27,7 @@ def load_conllu(file):
 
 def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, batch_size=8, 
                   map_input=False, map_type='linear', activation="leaky_relu", n_layers=2, 
-                  hidden_size=768, num_attention_heads=12):
+                  hidden_size=768, num_attention_heads=12, input_bert=None):
   model_path = map_model
   bert_config_file = bert_model+'/bert_config.json'
   vocab_file = bert_model+'/vocab.txt'
@@ -35,9 +35,14 @@ def list_to_bert(sents, bert_file, layer, map_model, bert_model, max_seq=256, ba
   output_file = bert_file
   bert_layer = layer
   max_seq_length = max_seq
+  if input_bert is not None:
+    load_pred_bert = True
+  else:
+    load_pred_bert = False
   flags = Args(model_path, vocab_file, bert_config_file, init_checkpoint, output_file, 
                 max_seq_length, bert_layer, map_type=map_type, activation=activation, 
-                n_layers=n_layers, hidden_size=hidden_size)
+                n_layers=n_layers, hidden_size=hidden_size, load_pred_bert=load_pred_bert,
+                bert_file0=input_bert)
   flags.batch_size = batch_size
   flags.map_input = map_input
   flags.num_attention_heads = num_attention_heads
@@ -144,6 +149,7 @@ parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden
 parser.add_argument("--map_type", type=str, default=None, help="mapping type(linear|nonlinear|attention|self_attention)")
 parser.add_argument("--head_num", type=int, default=12, help="attention head number")
 parser.add_argument("--merge_type", type=str, default=None, help="merge type (sum|avg|first|last|mid)")
+parser.add_argument("--input_bert", type=str, default=None, help="input bert file")
 args = parser.parse_args()
 
 map_model = args.mapping
@@ -160,7 +166,7 @@ for sent in load_conllu(conll_file):
 print ("Total {} Sentences".format(len(sents)))
 list_to_bert(sents,bert_file,layer,map_model, bert_model,max_seq=512,map_input=args.map_input,
             map_type=args.map_type, activation=args.activation, n_layers=args.n_layers,
-            hidden_size=args.hidden_size, num_attention_heads=args.head_num)
+            hidden_size=args.hidden_size, num_attention_heads=args.head_num, input_bert=args.input_bert)
 
 merge_types = args.merge_type.split(',')
 for merge_type in merge_types:
