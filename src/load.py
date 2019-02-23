@@ -476,7 +476,7 @@ def read_examples(input_file):
 def load_bert(input_file_a, input_file_b, n_max_sent=None):
     """Read a list of `InputExample`s from an input file."""
     examples = []
-
+    unique_id = 0
     with codecs.open(input_file_a, encoding='utf-8', errors='ignore') as f_a, codecs.open(input_file_b, encoding='utf-8', errors='ignore') as f_b:
         while True:
             line_a = f_a.readline()
@@ -485,29 +485,30 @@ def load_bert(input_file_a, input_file_b, n_max_sent=None):
                 break
             # src bert
             bert_a = json.loads(line_a)
-            unique_id_a = int(bert_a["linex_index"])
+            #unique_id_a = int(bert_a["linex_index"])
             bert_a = bert_a["features"]
             embs_a = [np.array(item["layers"][0]["values"]) for item in bert_a]
             toks_a = [item["token"] for item in bert_a]
             assert len(embs_a) == len(toks_a)
             # tgt bert
             bert_b = json.loads(line_b)
-            unique_id_b = int(bert_b["linex_index"])
+            #unique_id_b = int(bert_b["linex_index"])
             bert_b = bert_b["features"]
             embs_b = [np.array(item["layers"][0]["values"]) for item in bert_b]
             toks_b = [item["token"] for item in bert_b]
             assert len(embs_b) == len(toks_b)
-            try:
-                assert unique_id_a == unique_id_b 
-            except:
-                print ("BERT id mismatch: id_a:{}, id_b:{}".format(unique_id_a, unique_id_b))
-            unique_id = unique_id_a
+            #try:
+            #    assert unique_id_a == unique_id_b 
+            #except:
+            #    print ("BERT id mismatch: id_a:{}, id_b:{}".format(unique_id_a, unique_id_b))
+            #unique_id = unique_id_a
             examples.append(
               InputBertExample(unique_id=unique_id, embs_a=embs_a, toks_a=toks_a, embs_b=embs_b, toks_b=toks_b))
             if unique_id % 1000 == 0:
                 print ("\r%d" % unique_id, end="")
             if n_max_sent is not None and unique_id >= n_max_sent-1:
                 break
+            unique_id += 1
 
     return examples
 
