@@ -21,7 +21,7 @@ logger = getLogger()
 
 class SupervisedBertTrainer(object):
 
-    def __init__(self, bert_model, mapping, discriminator, args, bert_model1=None,
+    def __init__(self, bert_model, mapping, args, bert_model1=None,
                 trans_types=['self_attention','attention','linear_self_attention','nonlinear_self_attention']):
         """
         Initialize trainer script.
@@ -31,7 +31,6 @@ class SupervisedBertTrainer(object):
         self.bert_model = bert_model
         self.bert_model1 = bert_model1
         self.mapping = mapping
-        self.discriminator = discriminator
 
         if self.args.local_rank == -1 or self.args.no_cuda:
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")

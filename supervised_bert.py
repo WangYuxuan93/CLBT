@@ -79,10 +79,9 @@ def main():
     parser.add_argument("--rm_punc", default=False, action='store_true', help="Whether to remove punctuation while evaluating(sentence similarity)")
     parser.add_argument("--stop_words_src", type=str, default="", help="Stop word file for source language")
     parser.add_argument("--stop_words_tgt", type=str, default="", help="Stop word file for target language")
-    parser.add_argument("--save_dis", default=False, action='store_true', help="Whether to save self.discriminator")
     parser.add_argument("--eval_non_parallel", default=False, action='store_true', help="Whether to add disorder sentence while evaluating(sentence similarity)")
     # For predict
-    parser.add_argument("--pred", type=bool_flag, default=False, help="Map source bert to target space")
+    parser.add_argument("--pred", action='store_true', default=False, help="Map source bert to target space")
     parser.add_argument("--src_file", default=None, type=str, help="The source input file")
     parser.add_argument("--output_file", default=None, type=str, help="The output file of mapped source language embeddings")
     parser.add_argument("--base_embed", default=False, action='store_true', help="Use base embeddings of BERT?")
@@ -200,8 +199,8 @@ class SupervisedBert(object):
         if self.args.load_pred_bert:
             assert self.args.bert_file0 is not None
             assert self.args.bert_file1 is not None
-            assert self.vocab_file is not None
-            assert self.vocab_file1 is not None
+            assert self.args.vocab_file is not None
+            assert self.args.vocab_file1 is not None
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
@@ -212,7 +211,7 @@ class SupervisedBert(object):
                 batch_size=self.args.batch_size, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, local_rank=self.args.local_rank, 
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
-        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, 
                                     self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
 
         sampler = RandomSampler(self.dataset)
@@ -320,13 +319,15 @@ class SupervisedBert(object):
         if self.args.load_pred_bert:
             assert self.args.bert_file0 is not None
             assert self.args.bert_file1 is not None
+            assert self.args.vocab_file is not None
+            assert self.args.vocab_file1 is not None
             self.dataset, unique_id_to_feature, self.features = load_from_bert(self.args.vocab_file, self.args.bert_file0,
                 self.args.bert_file1, do_lower_case=self.args.do_lower_case, 
                 max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file,
                 align_punc=self.args.align_punc, policy=self.args.align_policy)
 
-        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, 
                                     self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
 
         sampler = SequentialSampler(self.dataset)
@@ -376,7 +377,7 @@ class SupervisedBert(object):
                 max_seq_length=self.args.max_seq_length, n_max_sent=self.args.n_max_sent,
                 vocab_file1=self.args.vocab_file1, align_file=self.args.align_file)
 
-        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, 
                                     self.args, bert_model1=self.bert_model1, trans_types=self.transformer_types)
         self.trainer.load_best()
         self.trainer.mapping.eval()
@@ -422,7 +423,7 @@ class SupervisedBert(object):
         """
         assert self.args.output_file is not None
 
-        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, 
                                         self.args, trans_types=self.transformer_types)
         self.trainer.load_best()
 
@@ -527,7 +528,7 @@ class SupervisedBert(object):
         """
         assert self.args.output_file is not None
 
-        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, 
                                         self.args, trans_types=self.transformer_types)
         self.trainer.load_best()
 
