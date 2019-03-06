@@ -60,32 +60,29 @@ def build_model(args, with_dis):
         torch.distributed.init_process_group(backend='nccl')
     print("device", device, "n_gpu", n_gpu, "distributed training", bool(args.local_rank != -1))
 
-    bert_config = BertConfig.from_json_file(args.bert_config_file)
-    if args.bert_config_file1: 
-        bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+    
     if args.load_pred_bert:
         model = None
         model1 = None
     else:
-        
+        bert_config = BertConfig.from_json_file(args.bert_config_file)
         model = BertModel(bert_config)
         if args.init_checkpoint is not None:
             model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'))
         model.to(device)
 
-        model1 = None
-        if args.bert_config_file1 and args.init_checkpoint1:
-            
-            model1 = BertModel(bert_config1)
-            if args.init_checkpoint is not None:
-                model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
-            model1.to(device)
-            assert bert_config.hidden_size == bert_config1.hidden_size
+        if args.bert_config_file1: 
+            bert_config1 = BertConfig.from_json_file(args.bert_config_file1)
+        model1 = BertModel(bert_config1)
+        if args.init_checkpoint is not None:
+            model1.load_state_dict(torch.load(args.init_checkpoint1, map_location='cpu'))
+        model1.to(device)
+        assert bert_config.hidden_size == bert_config1.hidden_size
 
     # mapping
     #if args.non_linear:
     if args.map_type == 'nonlinear':
-        assert args.emb_dim == bert_config.hidden_size
+        #assert args.emb_dim == bert_config.hidden_size
         mapping = NonLinearMap(args)
     #elif args.transformer:
     elif args.map_type == 'self_attention':
@@ -99,7 +96,7 @@ def build_model(args, with_dis):
     elif args.map_type == 'fine_tune':
         mapping = None
     elif args.map_type == 'linear' or args.map_type == 'svd':
-        assert args.emb_dim == bert_config.hidden_size
+        #assert args.emb_dim == bert_config.hidden_size
         logger.info("Linear mapping:\nEmbedding Dimension:{}".format(args.emb_dim))
         mapping = nn.Linear(args.emb_dim, args.emb_dim, bias=False)
         if getattr(args, 'map_id_init', True):
@@ -110,23 +107,14 @@ def build_model(args, with_dis):
     if mapping:
         mapping.to(device)
 
-    # discriminator
-    discriminator = None
-    if args.adversarial:
-        discriminator = Discriminator(args, bert_config.hidden_size) if with_dis else None
-        discriminator.to(device)
-
     if args.local_rank != -1 and not args.load_pred_bert:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
                                                           output_device=args.local_rank)
     elif n_gpu > 1:
         if not args.load_pred_bert:
             model = torch.nn.DataParallel(model)
-            if model1:
-                model1 = torch.nn.DataParallel(model1)
+            model1 = torch.nn.DataParallel(model1)
         if mapping:
             mapping = torch.nn.DataParallel(mapping)
-        if args.adversarial:
-            discriminator = torch.nn.DataParallel(discriminator)
 
-    return model, mapping, discriminator, model1
+    return model, model1, mapping

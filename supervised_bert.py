@@ -51,19 +51,19 @@ def main():
     parser.add_argument("--loss", type=str, default="l2_dist", help="loss type (cos_sim, max_margin_top-k, l2_dist)")
     # for bert
     parser.add_argument("--input_file", default=None, type=str)
-    parser.add_argument("--vocab_file", default=None, type=str, required=True, 
+    parser.add_argument("--vocab_file", default=None, type=str,
                             help="The vocabulary file that the BERT model was trained on.")
-    parser.add_argument("--bert_config_file", default=None, type=str, required=True,
+    parser.add_argument("--bert_config_file", default=None, type=str,
                             help="The config json file corresponding to the pre-trained BERT model. "
                                 "This specifies the model architecture.")
-    parser.add_argument("--init_checkpoint", default=None, type=str, required=True, 
+    parser.add_argument("--init_checkpoint", default=None, type=str,
                             help="Initial checkpoint (usually from a pre-trained BERT model).")
-    parser.add_argument("--vocab_file1", default=None, type=str, required=True, 
+    parser.add_argument("--vocab_file1", default=None, type=str,
                             help="The vocabulary file that the BERT model was trained on.")
-    parser.add_argument("--bert_config_file1", default=None, type=str, required=True,
+    parser.add_argument("--bert_config_file1", default=None, type=str,
                             help="The config json file corresponding to the pre-trained BERT model. "
                                 "This specifies the model architecture.")
-    parser.add_argument("--init_checkpoint1", default=None, type=str, required=True, 
+    parser.add_argument("--init_checkpoint1", default=None, type=str,
                             help="Initial checkpoint (usually from a pre-trained BERT model).")
     # Other parameters
     parser.add_argument("--bert_layer", default=-1, type=int)
@@ -89,7 +89,6 @@ def main():
     parser.add_argument("--map_input", default=False, action='store_true', help="Apply mapping to the BERT input embeddings?")
     parser.add_argument("--sim_file", type=str, default="", help="output similarity file")
     # For supervised learning
-    parser.add_argument("--adversarial", default=False, action='store_true', help="Adversarial training?")
     parser.add_argument("--align_file", default=None, type=str, help="The alignment file of paralleled sentences")
     parser.add_argument("--map_type", type=str, default='linear', help="svd|linear|nonlinear|self_attention|attention|linear_self_attention|nonlinear_self_attention|fine_tune")
     parser.add_argument("--emb_dim", type=int, default=768, help="BERT embedding dimension")
@@ -138,7 +137,6 @@ class Args(object):
                 emb_dim=768, num_attention_heads=12, attention_probs_dropout_prob=0, 
                 hidden_dropout_prob=0, load_pred_bert=False, bert_file0=None):
 
-        self.adversarial = False
         self.pred = True
         self.no_cuda = False
         self.cal_sent_sim = False
@@ -187,7 +185,7 @@ class SupervisedBert(object):
         if not (self.args.pred or self.args.eval):
             self.logger = initialize_exp(self.args)
 
-        self.bert_model, self.mapping, self.discriminator, self.bert_model1 = build_model(self.args, True)
+        self.bert_model, self.bert_model1, self.mapping = build_model(self.args, True)
 
         if self.args.local_rank == -1 or self.args.no_cuda:
             self.device = torch.device("cuda" if torch.cuda.is_available() and not self.args.no_cuda else "cpu")
