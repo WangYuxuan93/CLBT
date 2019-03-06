@@ -865,7 +865,7 @@ def load_single_bert(input_file, n_max_sent=None):
 
     return examples
 
-def convert_bert_examples_to_features_single(examples, seq_length, sents):
+def convert_bert_examples_to_features_single(examples, seq_length):
     """Loads a data file into a list of `InputBatch`s."""
 
     emb_pad = np.zeros(len(examples[0].embs[0]))
@@ -906,12 +906,12 @@ def convert_bert_examples_to_features_single(examples, seq_length, sents):
                     input_embs=input_embs))
     return features
 
-def load_from_single_bert(bert_file, sents, max_seq_length=128):
+def load_from_single_bert(bert_file, max_seq_length=128):
 
     examples = load_single_bert(bert_file)
-    assert len(sents) == len(examples)
+    #assert len(sents) == len(examples)
     
-    features = convert_bert_examples_to_features_single(examples, max_seq_length, sents)
+    features = convert_bert_examples_to_features_single(examples, max_seq_length)
 
     unique_id_to_feature = {}
     for feature in features:

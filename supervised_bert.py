@@ -43,7 +43,7 @@ def main():
     parser.add_argument("--map_optimizer", type=str, default="sgd,lr=0.1", help="self.mapping optimizer")
     parser.add_argument("--lr_decay", type=float, default=0.95, help="Learning rate decay (SGD only)") 
     parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum learning rate (SGD only)")
-    parser.add_argument("--lr_shrink", type=float, default=0.5, help="Shrink the learning rate if the validation metric decreases (1 to disable)")
+    #parser.add_argument("--lr_shrink", type=float, default=0.5, help="Shrink the learning rate if the validation metric decreases (1 to disable)")
     parser.add_argument("--decay_step", type=int, default=100, help="Learning rate decay step (SGD only)")
     parser.add_argument("--save_all", default=False, action='store_true', help="Save every model?")
     parser.add_argument("--quit_after_n_epochs_without_improvement", type=int, default=500, help="Quit after n epochs without improvement")
@@ -99,10 +99,10 @@ def main():
     parser.add_argument("--n_layers", type=int, default=1, help="mapping layer")
     parser.add_argument("--hidden_size", type=int, default=768, help="mapping hidden layer size")
     # For attention-based mapping
-    #parser.add_argument("--transformer", type=str, default=None, help="self_attention|attention")
     parser.add_argument("--num_attention_heads", type=int, default=12, help="attention head number")
     parser.add_argument("--attention_probs_dropout_prob", type=float, default=0.1, help="attention probability dropout rate")
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.1, help="attention hidden layer dropout rate")
+    # Load from pretrained bert file
     parser.add_argument("--load_pred_bert", action='store_true', default=False, help="Directly load predicted BERT")
     parser.add_argument("--bert_file0", default=None, type=str, help="Input predicted BERT file for language 0")
     parser.add_argument("--bert_file1", default=None, type=str, help="Input predicted BERT file for language 1")
@@ -122,10 +122,10 @@ def main():
     if args.eval:
         bert_super.eval()
         return
-
+    if args.pred:
+    		bert_super.transform()
     if not (args.pred or args.map_type=='svd'):
         bert_super.train()
-
     if args.map_type=='svd':
         bert_super.svd()
 
@@ -161,18 +161,15 @@ class Args(object):
         self.bert_config_file1 = bert_config_file1
         self.init_checkpoint1 = init_checkpoint1
 
-        #self.non_linear = non_linear
         self.activation = activation
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.emb_dim = emb_dim
 
-        #self.transformer = transformer
         self.num_attention_heads = num_attention_heads
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.hidden_dropout_prob = hidden_dropout_prob
 
-        #load_pred_bert
         self.load_pred_bert = load_pred_bert
         self.bert_file0 = bert_file0
 
@@ -183,7 +180,7 @@ class SupervisedBert(object):
         self.args = args
         # check parameters
         if not self.args.pred:
-            assert 0 < self.args.lr_shrink <= 1
+            #assert 0 < self.args.lr_shrink <= 1
             assert self.args.model_path is not None
         self.dataset = None
         # build model / trainer / evaluator
@@ -524,21 +521,58 @@ class SupervisedBert(object):
                         output_json["features"] = all_out_features
                         writer.write(json.dumps(output_json) + "\n")
 
-    def get_bert(self, input_ids, input_mask, bert_layer=-1, model_id=0):
+    def transform(self):
         """
-        Get BERT
+        Map bert of source language to target space
         """
-        with torch.no_grad():
-            if model_id == 0 or self.bert_model1 is None:
-                self.bert_model.eval()
-                all_encoder_layers, _ = self.bert_model(input_ids, token_type_ids=None, attention_mask=input_mask)
-            else:
-                self.bert_model1.eval()
-                all_encoder_layers, _ = self.bert_model1(input_ids, token_type_ids=None, attention_mask=input_mask)
-            encoder_layer = all_encoder_layers[bert_layer]
-        
-        # [batch_size, seq_len, output_dim]
-        return encoder_layer
+        assert self.args.output_file is not None
+
+        self.trainer = SupervisedBertTrainer(self.bert_model, self.mapping, self.discriminator, 
+                                        self.args, trans_types=self.transformer_types)
+        self.trainer.load_best()
+
+        assert self.args.bert_file0 is not None
+        pred_dataset, unique_id_to_feature, features = load_from_single_bert(self.args.bert_file0, max_seq_length=self.args.max_seq_length)
+        pred_sampler = SequentialSampler(pred_dataset)
+        pred_dataloader = DataLoader(pred_dataset, sampler=pred_sampler, batch_size=self.args.batch_size)
+ 
+        self.trainer.mapping.eval()
+        with open(self.args.output_file, "w", encoding='utf-8') as writer:
+            for input_embs, input_mask, example_indices in pred_dataloader:
+                input_embs = input_embs.to(self.device)
+                input_mask = input_mask.to(self.device)
+
+                src_encoder_layer = input_embs
+                if self.args.map_type in self.transformer_types:
+                    target_layer = self.trainer.mapping(src_encoder_layer, input_mask)
+                elif self.args.map_type == 'fine_tune':
+                    target_layer = src_encoder_layer
+                else:
+                    target_layer = self.trainer.mapping(src_encoder_layer)
+                
+                for b, example_index in enumerate(example_indices):
+                    feature = features[example_index.item()]
+                    unique_id = int(feature.unique_id)
+                    # feature = unique_id_to_feature[unique_id]
+                    output_json = OrderedDict()
+                    output_json["linex_index"] = unique_id
+                    all_out_features = []
+                    for (i, token) in enumerate(feature.tokens):
+                        all_layers = []
+                        layer_output = target_layer.detach().cpu().numpy()
+                        layer_output = layer_output[b]
+                        layers = OrderedDict()
+                        layers["index"] = self.args.bert_layer
+                        layers["values"] = [
+                            round(x.item(), 6) for x in layer_output[i]
+                        ]
+                        all_layers.append(layers)
+                        out_features = OrderedDict()
+                        out_features["token"] = token
+                        out_features["layers"] = all_layers
+                        all_out_features.append(out_features)
+                    output_json["features"] = all_out_features
+                    writer.write(json.dumps(output_json) + "\n")
 
 if __name__ == "__main__":
   main()
