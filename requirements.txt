@@ -1,0 +1,6 @@
+torch==0.4.1
+tqdm==4.28.1
+boto3==1.9.50
+requests==2.20.1
+numpy=1.15.4
+scipy=1.1.0
