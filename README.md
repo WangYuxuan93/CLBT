@@ -18,7 +18,8 @@ Some options:
 * --map_type: svd/linear/nonlinear. The `linear` is optimized with Adam. SVD is also a linear transformation and is faster, but `--no_cuda` option should be added when trained on big data. `linear` is recommended since it achieves the best performances in most languages.
 * --n_layers: number of layers for nonlinear transformation. (don't need to add if the model is linear)
 * --bert_file0: training data from source language (e.g. English).
-* --bert_file1: training data from target language (e.g. German), should be aligned to bert_file0
+* --bert_file1: training data from target language (e.g. German), should be parallel to bert_file0
+* --align_file: the alignment obtained by `fast_align`, the parallel sentences should be tokenized with the corresponding BERT vocabulary. (i.e. use EN Base vocab for English, use Multilingual Base vocab for other languages)
 * --vocab_file: bert vocab file of source language, should be the same to the vocab file of `--bert_file0`.
 * --vocab_file1: bert vocab file of target language, should be the same to the vocab file of `--bert_file1`.
 * --n_epochs: maximum training epochs.
