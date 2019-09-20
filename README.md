@@ -1,3 +1,16 @@
+## Cross-Lingual BERT Transformation (CLBT)
+
+This is the implementation of the paper [Cross-Lingual BERT Transformation for Zero-Shot Dependency Parsing](https://arxiv.org/abs/1909.06775). If you use this code or our results in your research, we'd appreciate you cite our paper as following:
+
+```
+@inproceedings{wang2019cross,
+  author    = {Wang, Yuxuan and Che, Wanxiang and Guo, Jiang and Liu, Yijia and  Liu, Ting},
+  title     = {Cross-Lingual BERT Transformation for Zero-Shot Dependency Parsing},
+  booktitle = {Proc. of EMNLP},
+  year      = {2019}
+}
+```
+
 ## Dependencies
 * Python 3.6 with [NumPy](http://www.numpy.org/)/[SciPy](https://www.scipy.org/)
 * [PyTorch] 0.4.1 (http://pytorch.org/)
