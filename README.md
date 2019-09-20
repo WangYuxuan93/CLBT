@@ -5,7 +5,8 @@ detailed requirements are in the requirements.txt file.
 
 ## Training
 
-Training and testing scripts for fast startup are in scripts. (the `source` line is used to activate virtualenv environment, if the requirements are installed in corrent environment, just remove the line)
+Training and testing scripts for fast startup are in the `scripts` file. (the `source` line is used to activate virtualenv environment, if the requirements are installed in corrent environment, just remove the line)
+Please first run the `train.sh` shell to train a model and the the `test.sh` shell to test the model.
 
 The following pre-processing is required for training, check `trial_data` file to see the format of each required input.
 
@@ -28,7 +29,7 @@ Some options:
 
 ## Transforming
 
-The testing procedure requires a bert file (-1 layer) and a transformation model trained by the training process.
+The testing procedure requires a bert file (-1 layer) and a transformation model trained by the training process. 
 
 Options:
 
@@ -40,3 +41,33 @@ Options:
 * --batch_size: predicting batch size.
 * --pred: activate predicting mode.
 
+## Using Pretrained Transformation
+
+We have uploaded pretrained transformation matrices in the `models` file for 17 languages with 2 optimizing mechanisms (i.e., SVD and GD). 
+If you would like to use these pretrained matrices, just use the `transform.sh` shell from the `scripts` file:
+
+`./scripts/transform.sh [GPU] [input bert file] [optimizer(gd|svd)] [language pair(e.g. de-en)] [output bert file]`
+
+For instance, to transform the German bert file in the `trial_data` with matrix trianed by SVD, use:
+
+`./scripts/transform.sh 1 trial_data/de.trial.bert svd de-en de.trial.svd.bert`
+
+The languages whose transformation matrices to English is provided are listed below:
+
+* Bulgarian (bg)
+* Czech (cs)
+* Danish (da)
+* German (de)
+* Spanish (es)
+* Estonian (et)
+* Finnish (fi)
+* French (fr)
+* Italian (it)
+* Latvian (lv)
+* Dutch (nl)
+* Polish (pl)
+* Portuguese (pt)
+* Romanian (ro)
+* Slovak (sk)
+* Slovenian (sl)
+* Swedish (sv)
