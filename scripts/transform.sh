@@ -16,7 +16,7 @@ type=$4
 output=$5
 
 if [ -z $1 ];then
-  echo "usage:./train.sh [GPU] [input] [model path] [type] [output]"
+  echo "params: [GPU] [input] [model path] [type] [output]"
   exit
 fi
 
@@ -28,4 +28,16 @@ CUDA_VISIBLE_DEVICES=$gpu python $main --load_pred_bert --bert_file0 $input0 \
 --vocab_file $vocab --pred
 }
 
-test 4 trial_data/de-en.100.de.bert svd.en-de.trial-model linear de.transformed.bert 
+if [ -z $5 ];then
+  echo "usage:./transform.sh [GPU] [input] [optimizer(gd|svd)] [language pair(e.g. de-en)] [output]"
+  exit
+fi
+
+gpu=$1
+input=$2
+opt=$3
+pair=$4
+output=$5
+model=models/$opt/$opt.$pair
+
+test $gpu $input $model linear $output

@@ -25,7 +25,7 @@ if [ -z $1 ];then
   exit
 fi
 
-source $env 
+#source $env 
 CUDA_VISIBLE_DEVICES=$gpu python $main --bert_file0 $input0 --bert_file1 $input1 \
 --model_path $model --batch_size $batch --n_epochs $n_epoch \
 --map_optimizer $opt --n_layers $n_layer \
@@ -36,5 +36,5 @@ CUDA_VISIBLE_DEVICES=$gpu python $main --bert_file0 $input0 --bert_file1 $input1
 }
 
 env=/users2/yxwang/work/env/py3.6_torch0.4.1/bin/activate
-train 1 trial_data/de-en.100.de.bert trial_data/de-en.100.en.bert saves trial_data/de-en.100.wp.align svd
+train 1 trial_data/de-en.100.de.bert trial_data/de-en.100.en.bert svd.en-de.trial-model trial_data/de-en.100.wp.align svd
 
